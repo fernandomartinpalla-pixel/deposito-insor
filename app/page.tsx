@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
@@ -13,6 +14,7 @@ type Cliente = {
   nombre: string;
   telefono: string | null;
   direccion: string | null;
+  departamento?: string | null;
 };
 
 type Entrega = {
@@ -27,11 +29,9 @@ type Entrega = {
   observaciones: string | null;
   estado: Estado;
   prioridad?: Prioridad | null;
-  chofer?: string | null;
-  vehiculo?: string | null;
-  ruta?: string | null;
   telefono_cliente?: string | null;
   direccion?: string | null;
+  departamento?: string | null;
   created_at?: string;
 };
 
@@ -40,6 +40,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [entregas, setEntregas] = useState<Entrega[]>([]);
 
   const [cliente, setCliente] = useState("");
   const [fechaPedido, setFechaPedido] = useState(new Date().toISOString().slice(0, 10));
@@ -48,83 +49,71 @@ export default function Home() {
   const [monto, setMonto] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [prioridad, setPrioridad] = useState<Prioridad>("normal");
-  const [chofer, setChofer] = useState("");
-  const [vehiculo, setVehiculo] = useState("");
-  const [ruta, setRuta] = useState("");
   const [telefono, setTelefono] = useState("");
   const [direccion, setDireccion] = useState("");
+  const [departamento, setDepartamento] = useState("");
 
-  const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [busqueda, setBusqueda] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [editando, setEditando] = useState<Entrega | null>(null);
+  const [seleccionadoId, setSeleccionadoId] = useState<number | null>(null);
 
   const [filtroHistorial, setFiltroHistorial] = useState<FiltroHistorial>("ultimos5");
   const [mesSeleccionado, setMesSeleccionado] = useState("");
 
-useEffect(() => {
-  obtenerSesion();
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null);
+      setLoading(false);
+    });
 
-  const channel = supabase
-    .channel("realtime-entregas-clientes")
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "entregas",
-      },
-      async () => {
-        await cargarEntregas();
-      }
-    )
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "clientes",
-      },
-      async () => {
-        await cargarClientes();
-      }
-    )
-    .subscribe();
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
 
-  const intervalo = setInterval(async () => {
-    await cargarEntregas();
-    await cargarClientes();
-  }, 15000);
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
 
-  return () => {
-    supabase.removeChannel(channel);
-    clearInterval(intervalo);
-  };
-}, []);
+  useEffect(() => {
+    if (!user) return;
 
-  async function obtenerSesion() {
-    const { data: { session } } = await supabase.auth.getSession();
+    cargarEntregas();
+    cargarClientes();
 
-    setUser(session?.user ?? null);
-    setLoading(false);
+    const channel = supabase
+      .channel("deposito-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "entregas" }, () => {
+        cargarEntregas();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "clientes" }, () => {
+        cargarClientes();
+      })
+      .subscribe();
 
-    if (session?.user) {
+    const intervalo = setInterval(() => {
       cargarEntregas();
       cargarClientes();
-    }
+    }, 5000);
 
-    supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        cargarEntregas();
-        cargarClientes();
-      }
-    });
-  }
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(intervalo);
+    };
+  }, [user]);
 
   async function login(email: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setMensaje(error.message);
+    setMensaje("");
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      setMensaje(error.message);
+    }
   }
 
   async function logout() {
@@ -143,7 +132,13 @@ useEffect(() => {
       return;
     }
 
-    setEntregas(data as Entrega[]);
+    const normalizadas = (data || []).map((e) => ({
+      ...e,
+      estado: e.estado || "a_entregar",
+      prioridad: e.prioridad || "normal",
+    })) as Entrega[];
+
+    setEntregas(normalizadas);
   }
 
   async function cargarClientes() {
@@ -167,10 +162,11 @@ useEffect(() => {
     if (encontrado) {
       setTelefono(encontrado.telefono || "");
       setDireccion(encontrado.direccion || "");
+      setDepartamento(encontrado.departamento || "");
     }
   }
 
-  async function guardarClienteAutomatico(nombre: string, tel: string, dir: string) {
+  async function guardarClienteAutomatico(nombre: string, tel: string, dir: string, dep: string) {
     if (!nombre.trim()) return;
 
     await supabase.from("clientes").upsert(
@@ -179,6 +175,7 @@ useEffect(() => {
           nombre: nombre.trim(),
           telefono: tel.trim() || null,
           direccion: dir.trim() || null,
+          departamento: dep.trim() || null,
         },
       ],
       {
@@ -192,28 +189,26 @@ useEffect(() => {
   async function guardarEntrega() {
     setMensaje("");
 
-    if (!cliente || !factura || !monto) {
+    if (!cliente.trim() || !factura.trim() || !monto) {
       setMensaje("Faltan datos obligatorios.");
       return;
     }
 
-    await guardarClienteAutomatico(cliente, telefono, direccion);
+    await guardarClienteAutomatico(cliente, telefono, direccion, departamento);
 
     const { error } = await supabase.from("entregas").insert([
       {
-        cliente,
+        cliente: cliente.trim(),
         fecha_pedido: fechaPedido,
         fecha_entrega_programada: fechaEntrega,
         fecha_entregado: fechaEntrega,
-        numero_factura: factura,
+        numero_factura: factura.trim(),
         monto: Number(monto),
-        observaciones,
+        observaciones: observaciones.trim(),
         prioridad,
-        chofer,
-        vehiculo,
-        ruta,
-        telefono_cliente: telefono,
-        direccion,
+        telefono_cliente: telefono.trim(),
+        direccion: direccion.trim(),
+        departamento: departamento.trim(),
         estado: "a_entregar",
       },
     ]);
@@ -236,11 +231,9 @@ useEffect(() => {
     setMonto("");
     setObservaciones("");
     setPrioridad("normal");
-    setChofer("");
-    setVehiculo("");
-    setRuta("");
     setTelefono("");
     setDireccion("");
+    setDepartamento("");
   }
 
   async function cambiarEstado(id: number, estado: Estado) {
@@ -250,7 +243,10 @@ useEffect(() => {
       updateData.fecha_entregado_real = new Date().toISOString();
     }
 
-    const { error } = await supabase.from("entregas").update(updateData).eq("id", id);
+    const { error } = await supabase
+      .from("entregas")
+      .update(updateData)
+      .eq("id", id);
 
     if (error) {
       setMensaje(error.message);
@@ -266,7 +262,8 @@ useEffect(() => {
     await guardarClienteAutomatico(
       editando.cliente,
       editando.telefono_cliente || "",
-      editando.direccion || ""
+      editando.direccion || "",
+      editando.departamento || ""
     );
 
     const { error } = await supabase
@@ -280,11 +277,9 @@ useEffect(() => {
         monto: Number(editando.monto),
         observaciones: editando.observaciones,
         prioridad: editando.prioridad || "normal",
-        chofer: editando.chofer,
-        vehiculo: editando.vehiculo,
-        ruta: editando.ruta,
         telefono_cliente: editando.telefono_cliente,
         direccion: editando.direccion,
+        departamento: editando.departamento,
       })
       .eq("id", editando.id);
 
@@ -318,6 +313,150 @@ useEffect(() => {
     return `${nombres[Number(nroMes) - 1]} ${anio}`;
   }
 
+  function imprimirEtiqueta(pedido: Entrega) {
+    const ventana = window.open("", "_blank");
+
+    if (!ventana) {
+      setMensaje("El navegador bloqueó la ventana de impresión.");
+      return;
+    }
+
+    ventana.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Etiqueta ${pedido.numero_factura}</title>
+          <style>
+            @page {
+              size: A4;
+              margin: 18mm;
+            }
+
+            body {
+              font-family: Arial, sans-serif;
+              margin: 0;
+              background: white;
+              color: #111;
+            }
+
+            .label {
+              width: 10cm;
+              min-height: 15cm;
+              border: 2px solid #111;
+              padding: 18px;
+              box-sizing: border-box;
+            }
+
+            .brand {
+              font-size: 28px;
+              font-weight: 900;
+              letter-spacing: 1px;
+              margin-bottom: 4px;
+            }
+
+            .sub {
+              font-size: 13px;
+              font-weight: 700;
+              border-bottom: 2px solid #111;
+              padding-bottom: 10px;
+              margin-bottom: 18px;
+            }
+
+            .block {
+              margin-bottom: 16px;
+            }
+
+            .title {
+              font-size: 11px;
+              font-weight: 700;
+              color: #555;
+              text-transform: uppercase;
+              margin-bottom: 3px;
+            }
+
+            .value {
+              font-size: 20px;
+              font-weight: 800;
+              line-height: 1.25;
+            }
+
+            .small {
+              font-size: 15px;
+              font-weight: 700;
+            }
+
+            .footer {
+              margin-top: 20px;
+              border-top: 1px solid #111;
+              padding-top: 10px;
+              font-size: 11px;
+              color: #444;
+            }
+
+            @media print {
+              body {
+                print-color-adjust: exact;
+              }
+            }
+          </style>
+        </head>
+
+        <body>
+          <div class="label">
+            <div class="brand">INSOR</div>
+            <div class="sub">ENVÍO / ENTREGA</div>
+
+            <div class="block">
+              <div class="title">Cliente</div>
+              <div class="value">${pedido.cliente || "-"}</div>
+            </div>
+
+            <div class="block">
+              <div class="title">Dirección</div>
+              <div class="value">${pedido.direccion || "-"}</div>
+            </div>
+
+            <div class="block">
+              <div class="title">Departamento</div>
+              <div class="value">${pedido.departamento || "-"}</div>
+            </div>
+
+            <div class="block">
+              <div class="title">Teléfono</div>
+              <div class="value">${pedido.telefono_cliente || "-"}</div>
+            </div>
+
+            <div class="block">
+              <div class="title">Factura</div>
+              <div class="value">${pedido.numero_factura || "-"}</div>
+            </div>
+
+            <div class="block">
+              <div class="title">Fecha entrega</div>
+              <div class="small">${fechaUY(pedido.fecha_entrega_programada || pedido.fecha_entregado)}</div>
+            </div>
+
+            <div class="footer">
+              Generado desde Depósito Insor
+            </div>
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+
+    ventana.document.close();
+  }
+
+  const pedidoSeleccionado = useMemo(() => {
+    return entregas.find((e) => e.id === seleccionadoId) || null;
+  }, [entregas, seleccionadoId]);
+
   const filtradas = useMemo(() => {
     const texto = busqueda.toLowerCase();
 
@@ -325,8 +464,9 @@ useEffect(() => {
       (e) =>
         e.cliente?.toLowerCase().includes(texto) ||
         e.numero_factura?.toLowerCase().includes(texto) ||
-        e.chofer?.toLowerCase().includes(texto) ||
-        e.ruta?.toLowerCase().includes(texto)
+        e.telefono_cliente?.toLowerCase().includes(texto) ||
+        e.direccion?.toLowerCase().includes(texto) ||
+        e.departamento?.toLowerCase().includes(texto)
     );
   }, [busqueda, entregas]);
 
@@ -412,14 +552,14 @@ useEffect(() => {
             <div>
               <h2 className="text-5xl font-bold">Dashboard</h2>
               <p className="text-slate-400 mt-2">
-                Gestión de pedidos, reparto y clientes
+                Gestión de pedidos, reparto, clientes y etiquetas
               </p>
             </div>
 
             <input
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar cliente, factura, chofer o ruta..."
+              placeholder="Buscar cliente, factura, teléfono o dirección..."
               className="bg-slate-900 border border-slate-700 rounded-2xl px-5 py-4 w-full lg:w-96"
             />
           </div>
@@ -427,6 +567,23 @@ useEffect(() => {
           {mensaje && (
             <div className="bg-cyan-500/20 border border-cyan-500 text-cyan-100 px-5 py-4 rounded-2xl mb-6">
               {mensaje}
+            </div>
+          )}
+
+          {pedidoSeleccionado && (
+            <div className="bg-slate-900 border border-cyan-500/40 rounded-3xl p-5 mb-6 flex flex-col lg:flex-row gap-4 lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm text-slate-400">Pedido seleccionado</p>
+                <p className="text-xl font-bold">
+                  {pedidoSeleccionado.cliente} · Factura {pedidoSeleccionado.numero_factura}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Boton texto="✏️ Editar seleccionado" color="bg-slate-500" onClick={() => setEditando(pedidoSeleccionado)} />
+                <Boton texto="↩️ Restaurar a entregar" color="bg-cyan-500" onClick={() => cambiarEstado(pedidoSeleccionado.id, "a_entregar")} />
+                <Boton texto="🏷️ Imprimir etiqueta" color="bg-purple-500" onClick={() => imprimirEtiqueta(pedidoSeleccionado)} />
+              </div>
             </div>
           )}
 
@@ -448,12 +605,9 @@ useEffect(() => {
               <Input type="date" placeholder="Fecha entrega" value={fechaEntrega} onChange={setFechaEntrega} />
               <SelectPrioridad value={prioridad} onChange={setPrioridad} />
 
-              <Input placeholder="Chofer" value={chofer} onChange={setChofer} />
-              <Input placeholder="Vehículo" value={vehiculo} onChange={setVehiculo} />
-              <Input placeholder="Ruta" value={ruta} onChange={setRuta} />
-
               <Input placeholder="Teléfono cliente" value={telefono} onChange={setTelefono} />
               <Input placeholder="Dirección" value={direccion} onChange={setDireccion} />
+              <Input placeholder="Departamento" value={departamento} onChange={setDepartamento} />
             </div>
 
             <textarea
@@ -477,9 +631,12 @@ useEffect(() => {
             entregas={aEntregar}
             fechaUY={fechaUY}
             usd={usd}
+            seleccionadoId={seleccionadoId}
+            onSeleccionar={setSeleccionadoId}
             acciones={(e) => (
               <div className="flex gap-2 flex-wrap">
                 <Boton texto="✏️ Editar" color="bg-slate-500" onClick={() => setEditando(e)} />
+                <Boton texto="🏷️ Etiqueta" color="bg-purple-500" onClick={() => imprimirEtiqueta(e)} />
                 <Boton texto="✅ Entregado" color="bg-emerald-500" onClick={() => cambiarEstado(e.id, "entregado")} />
                 <Boton texto="⏳ Pendiente" color="bg-yellow-500" onClick={() => cambiarEstado(e.id, "pendiente")} />
                 <Boton texto="🗑️ Papelera" color="bg-red-500" onClick={() => cambiarEstado(e.id, "papelera")} />
@@ -493,9 +650,12 @@ useEffect(() => {
             entregas={pendientes}
             fechaUY={fechaUY}
             usd={usd}
+            seleccionadoId={seleccionadoId}
+            onSeleccionar={setSeleccionadoId}
             acciones={(e) => (
               <div className="flex gap-2 flex-wrap">
                 <Boton texto="✏️ Editar" color="bg-slate-500" onClick={() => setEditando(e)} />
+                <Boton texto="🏷️ Etiqueta" color="bg-purple-500" onClick={() => imprimirEtiqueta(e)} />
                 <Boton texto="🚚 Volver a entregar" color="bg-cyan-500" onClick={() => cambiarEstado(e.id, "a_entregar")} />
                 <Boton texto="✅ Entregado" color="bg-emerald-500" onClick={() => cambiarEstado(e.id, "entregado")} />
               </div>
@@ -544,9 +704,13 @@ useEffect(() => {
               entregas={entregadosFiltrados}
               fechaUY={fechaUY}
               usd={usd}
+              seleccionadoId={seleccionadoId}
+              onSeleccionar={setSeleccionadoId}
               acciones={(e) => (
                 <div className="flex gap-2 flex-wrap">
                   <Boton texto="✏️ Editar" color="bg-slate-500" onClick={() => setEditando(e)} />
+                  <Boton texto="🏷️ Etiqueta" color="bg-purple-500" onClick={() => imprimirEtiqueta(e)} />
+                  <Boton texto="↩️ Restaurar" color="bg-cyan-500" onClick={() => cambiarEstado(e.id, "a_entregar")} />
                   <Boton texto="🗑️ Papelera" color="bg-red-500" onClick={() => cambiarEstado(e.id, "papelera")} />
                 </div>
               )}
@@ -559,6 +723,8 @@ useEffect(() => {
             entregas={papelera}
             fechaUY={fechaUY}
             usd={usd}
+            seleccionadoId={seleccionadoId}
+            onSeleccionar={setSeleccionadoId}
             acciones={(e) => (
               <div className="flex gap-2 flex-wrap">
                 <Boton texto="✏️ Editar" color="bg-slate-500" onClick={() => setEditando(e)} />
@@ -644,6 +810,7 @@ function EditarModal({
       cliente: nombre,
       telefono_cliente: encontrado?.telefono || pedido.telefono_cliente || "",
       direccion: encontrado?.direccion || pedido.direccion || "",
+      departamento: encontrado?.departamento || pedido.departamento || "",
     });
   }
 
@@ -680,12 +847,9 @@ function EditarModal({
             onChange={(v) => setPedido({ ...pedido, prioridad: v })}
           />
 
-          <Input value={pedido.chofer || ""} onChange={(v) => setPedido({ ...pedido, chofer: v })} placeholder="Chofer" />
-          <Input value={pedido.vehiculo || ""} onChange={(v) => setPedido({ ...pedido, vehiculo: v })} placeholder="Vehículo" />
-          <Input value={pedido.ruta || ""} onChange={(v) => setPedido({ ...pedido, ruta: v })} placeholder="Ruta" />
-
           <Input value={pedido.telefono_cliente || ""} onChange={(v) => setPedido({ ...pedido, telefono_cliente: v })} placeholder="Teléfono cliente" />
           <Input value={pedido.direccion || ""} onChange={(v) => setPedido({ ...pedido, direccion: v })} placeholder="Dirección" />
+          <Input value={pedido.departamento || ""} onChange={(v) => setPedido({ ...pedido, departamento: v })} placeholder="Departamento" />
         </div>
 
         <textarea
@@ -779,13 +943,17 @@ function GridSection({
   fechaUY,
   usd,
   acciones,
+  seleccionadoId,
+  onSeleccionar,
 }: {
   titulo: string;
   color: string;
   entregas: Entrega[];
   fechaUY: (fecha?: string | null) => string;
   usd: (valor: number) => string;
-  acciones: (e: Entrega) => React.ReactNode;
+  acciones: (e: Entrega) => ReactNode;
+  seleccionadoId: number | null;
+  onSeleccionar: (id: number | null) => void;
 }) {
   return (
     <section className={`bg-slate-900 border ${color} rounded-3xl p-6 mb-8`}>
@@ -794,7 +962,14 @@ function GridSection({
         <p className="text-slate-400">{entregas.length} pedidos</p>
       </div>
 
-      <TablaEntregas entregas={entregas} fechaUY={fechaUY} usd={usd} acciones={acciones} />
+      <TablaEntregas
+        entregas={entregas}
+        fechaUY={fechaUY}
+        usd={usd}
+        acciones={acciones}
+        seleccionadoId={seleccionadoId}
+        onSeleccionar={onSeleccionar}
+      />
     </section>
   );
 }
@@ -804,22 +979,26 @@ function TablaEntregas({
   fechaUY,
   usd,
   acciones,
+  seleccionadoId,
+  onSeleccionar,
 }: {
   entregas: Entrega[];
   fechaUY: (fecha?: string | null) => string;
   usd: (valor: number) => string;
-  acciones: (e: Entrega) => React.ReactNode;
+  acciones: (e: Entrega) => ReactNode;
+  seleccionadoId: number | null;
+  onSeleccionar: (id: number | null) => void;
 }) {
   return (
     <div className="overflow-auto">
-      <table className="w-full min-w-[1100px]">
+      <table className="w-full min-w-[1200px]">
         <thead>
           <tr className="text-left border-b border-slate-800 text-slate-400">
+            <th className="pb-4">Sel.</th>
             <th className="pb-4">Cliente</th>
             <th className="pb-4">Factura</th>
             <th className="pb-4">Entrega</th>
             <th className="pb-4">Prioridad</th>
-            <th className="pb-4">Chofer/Ruta</th>
             <th className="pb-4">Monto</th>
             <th className="pb-4">Acciones</th>
           </tr>
@@ -828,23 +1007,27 @@ function TablaEntregas({
         <tbody>
           {entregas.map((e) => (
             <tr key={e.id} className="border-b border-slate-800">
-<td className="py-5 font-semibold">
-  <div>{e.cliente}</div>
+              <td className="py-5">
+                <input
+                  type="checkbox"
+                  checked={seleccionadoId === e.id}
+                  onChange={(ev) => onSeleccionar(ev.target.checked ? e.id : null)}
+                  className="h-5 w-5"
+                />
+              </td>
 
-  <div className="text-xs text-slate-500">
-    {e.telefono_cliente || ""}
-  </div>
+              <td className="py-5 font-semibold">
+                <div>{e.cliente}</div>
+                <div className="text-xs text-slate-500">{e.telefono_cliente || ""}</div>
+                <div className="text-xs text-slate-500">{e.direccion || ""}</div>
+                <div className="text-xs text-slate-500">{e.departamento || ""}</div>
 
-  <div className="text-xs text-slate-500">
-    {e.direccion || ""}
-  </div>
-
-  {e.observaciones && (
-    <div className="mt-2 text-xs text-cyan-300 bg-slate-800 rounded-lg px-3 py-2 max-w-xs">
-      📝 {e.observaciones}
-    </div>
-  )}
-</td>
+                {e.observaciones && (
+                  <div className="mt-2 text-xs text-cyan-300 bg-slate-800 rounded-lg px-3 py-2 max-w-xs">
+                    📝 {e.observaciones}
+                  </div>
+                )}
+              </td>
 
               <td>{e.numero_factura}</td>
               <td>{fechaUY(e.fecha_entrega_programada || e.fecha_entregado)}</td>
@@ -859,11 +1042,6 @@ function TablaEntregas({
                 }`}>
                   {e.prioridad || "normal"}
                 </span>
-              </td>
-
-              <td>
-                <div>{e.chofer || "-"}</div>
-                <div className="text-xs text-slate-500">{e.ruta || ""}</div>
               </td>
 
               <td>{usd(e.monto)}</td>

@@ -205,49 +205,53 @@ export default function Home() {
       setClientes(data as Cliente[]);
     }
   }
+function autocompletarCliente(nombre: string) {
+  setCliente(nombre);
 
-  function autocompletarCliente(nombre: string) {
-    setCliente(nombre);
+  const texto = nombre.trim().toLowerCase();
 
-    const encontrado = clientes.find(
-      (c) =>
-        c.nombre.trim().toLowerCase() ===
-        nombre.trim().toLowerCase()
-    );
+  if (!texto) return;
 
-    if (encontrado) {
-      setTelefono(encontrado.telefono || "");
-      setDireccion(encontrado.direccion || "");
-      setDepartamento(
-        encontrado.departamento || ""
-      );
-    }
+  const encontrado = clientes.find((c) =>
+    c.nombre.trim().toLowerCase().includes(texto)
+  );
+
+  if (encontrado) {
+    setTelefono(encontrado.telefono || "");
+    setDireccion(encontrado.direccion || "");
+    setDepartamento(encontrado.departamento || "");
   }
+}
 
-  async function guardarClienteAutomatico(
-    nombre: string,
-    tel: string,
-    dir: string,
-    dep: string
-  ) {
-    if (!nombre.trim()) return;
+async function guardarClienteAutomatico(
+  nombre: string,
+  tel: string,
+  dir: string,
+  dep: string
+) {
+  if (!nombre.trim()) return;
 
-    await supabase.from("clientes").upsert(
-      [
-        {
-          nombre: nombre.trim(),
-          telefono: tel.trim() || null,
-          direccion: dir.trim() || null,
-          departamento: dep.trim() || null,
-        },
-      ],
+  const { error } = await supabase.from("clientes").upsert(
+    [
       {
-        onConflict: "nombre",
-      }
-    );
+        nombre: nombre.trim(),
+        telefono: tel.trim() || null,
+        direccion: dir.trim() || null,
+        departamento: dep.trim() || null,
+      },
+    ],
+    {
+      onConflict: "nombre",
+    }
+  );
 
-    await cargarClientes();
+  if (error) {
+    setMensaje("Error al guardar cliente: " + error.message);
+    return;
   }
+
+  await cargarClientes();
+}
 
   async function guardarEntrega() {
     setMensaje("");

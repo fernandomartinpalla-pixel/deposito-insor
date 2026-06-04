@@ -792,11 +792,23 @@ function TablaEntregas({
         <tbody>
           {entregas.map((e) => (
             <tr key={e.id} className="border-b border-slate-800">
-              <td className="py-5 font-semibold">
-                <div>{e.cliente}</div>
-                <div className="text-xs text-slate-500">{e.telefono_cliente || ""}</div>
-                <div className="text-xs text-slate-500">{e.direccion || ""}</div>
-              </td>
+<td className="py-5 font-semibold">
+  <div>{e.cliente}</div>
+
+  <div className="text-xs text-slate-500">
+    {e.telefono_cliente || ""}
+  </div>
+
+  <div className="text-xs text-slate-500">
+    {e.direccion || ""}
+  </div>
+
+  {e.observaciones && (
+    <div className="mt-2 text-xs text-cyan-300 bg-slate-800 rounded-lg px-3 py-2 max-w-xs">
+      📝 {e.observaciones}
+    </div>
+  )}
+</td>
 
               <td>{e.numero_factura}</td>
               <td>{fechaUY(e.fecha_entrega_programada || e.fecha_entregado)}</td>

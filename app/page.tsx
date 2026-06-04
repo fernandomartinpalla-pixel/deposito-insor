@@ -205,16 +205,30 @@ export default function Home() {
       setClientes(data as Cliente[]);
     }
   }
-function autocompletarCliente(nombre: string) {
+async function autocompletarCliente(nombre: string) {
   setCliente(nombre);
 
-  const texto = nombre.trim().toLowerCase();
+  const texto = nombre.trim();
 
-  if (!texto) return;
+  if (texto.length < 2) {
+    setTelefono("");
+    setDireccion("");
+    setDepartamento("");
+    return;
+  }
 
-  const encontrado = clientes.find((c) =>
-    c.nombre.trim().toLowerCase().includes(texto)
-  );
+  const { data, error } = await supabase
+    .from("clientes")
+    .select("*")
+    .ilike("nombre", `%${texto}%`)
+    .limit(1);
+
+  if (error) {
+    setMensaje("Error buscando cliente: " + error.message);
+    return;
+  }
+
+  const encontrado = data?.[0];
 
   if (encontrado) {
     setTelefono(encontrado.telefono || "");

@@ -62,9 +62,45 @@ export default function Home() {
   const [filtroHistorial, setFiltroHistorial] = useState<FiltroHistorial>("ultimos5");
   const [mesSeleccionado, setMesSeleccionado] = useState("");
 
-  useEffect(() => {
-    obtenerSesion();
-  }, []);
+useEffect(() => {
+  obtenerSesion();
+
+  const channel = supabase
+    .channel("realtime-entregas-clientes")
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "entregas",
+      },
+      async () => {
+        await cargarEntregas();
+      }
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "clientes",
+      },
+      async () => {
+        await cargarClientes();
+      }
+    )
+    .subscribe();
+
+  const intervalo = setInterval(async () => {
+    await cargarEntregas();
+    await cargarClientes();
+  }, 15000);
+
+  return () => {
+    supabase.removeChannel(channel);
+    clearInterval(intervalo);
+  };
+}, []);
 
   async function obtenerSesion() {
     const { data: { session } } = await supabase.auth.getSession();

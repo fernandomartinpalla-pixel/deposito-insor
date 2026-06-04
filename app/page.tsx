@@ -80,8 +80,15 @@ export default function Home() {
   const [editando, setEditando] =
     useState<Entrega | null>(null);
 
-  const [seleccionadoId, setSeleccionadoId] =
-    useState<number | null>(null);
+ const [seleccionados, setSeleccionados] =
+  useState<number[]>([]);
+  function toggleSeleccion(id: number) {
+  setSeleccionados((prev) =>
+    prev.includes(id)
+      ? prev.filter((x) => x !== id)
+      : [...prev, id]
+  );
+}
 
   const [filtroHistorial, setFiltroHistorial] =
     useState<FiltroHistorial>("ultimos5");
@@ -1766,9 +1773,9 @@ function TablaEntregas({
               <td className="py-5">
                 <input
                   type="checkbox"
-                  checked={seleccionadoId === e.id}
+                  checked={seleccionados.includes(e.id)}
                   onChange={(ev) =>
-                    onSeleccionar(ev.target.checked ? e.id : null)
+                   toggleSeleccion(e.id)
                   }
                   className="h-5 w-5"
                 />

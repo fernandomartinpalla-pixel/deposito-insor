@@ -477,8 +477,11 @@ async function guardarClienteAutomatico(
     );
   }
 
-  const pedidoSeleccionado =
-    obtenerSeleccionado();
+const pedidosSeleccionados = useMemo(() => {
+  return entregas.filter((e) => seleccionados.includes(e.id));
+}, [entregas, seleccionados]);
+
+const pedidoSeleccionado = pedidosSeleccionados[0] || null;
 
   function accionEditar() {
     if (!pedidoSeleccionado) return;

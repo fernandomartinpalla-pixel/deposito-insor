@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
+type Estado = "a_entregar" | "pendiente" | "entregado" | "papelera";
+type FiltroHistorial = "ultimos5" | "esteMes" | "porMes" | "todas";
+
 type Entrega = {
   id: number;
   cliente: string;
@@ -11,80 +14,61 @@ type Entrega = {
   numero_factura: string;
   monto: number;
   observaciones: string | null;
+  estado: Estado;
   created_at?: string;
-  activo?: boolean;
-  eliminado_en?: string | null;
-  eliminado_motivo?: string | null;
 };
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
-  const [cargandoSesion, setCargandoSesion] = useState(true);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [cliente, setCliente] = useState("");
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
   const [factura, setFactura] = useState("");
   const [monto, setMonto] = useState("");
   const [observaciones, setObservaciones] = useState("");
 
+  const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [busqueda, setBusqueda] = useState("");
-  const [busquedaPapelera, setBusquedaPapelera] = useState("");
-  const [editando, setEditando] = useState<Entrega | null>(null);
-  const [confirmarEliminar, setConfirmarEliminar] = useState<number | null>(null);
   const [mensaje, setMensaje] = useState("");
-  const [vista, setVista] = useState<"inicio" | "historial" | "papelera">("inicio");
+
+  const [filtroHistorial, setFiltroHistorial] =
+    useState<FiltroHistorial>("ultimos5");
+
+  const [mesSeleccionado, setMesSeleccionado] = useState("");
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user ?? null);
-      setCargandoSesion(false);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => {
-      listener.subscription.unsubscribe();
-    };
+    obtenerSesion();
   }, []);
 
-  useEffect(() => {
-    if (user) {
-      cargarEntregas();
-    }
-  }, [user]);
+  async function obtenerSesion() {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-  async function iniciarSesion() {
-    setMensaje("");
+    setUser(session?.user ?? null);
+    setLoading(false);
 
-    if (!email || !password) {
-      setMensaje("Ingresá email y contraseña.");
-      return;
-    }
+    if (session?.user) cargarEntregas();
 
+    supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) cargarEntregas();
+    });
+  }
+
+  async function login(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    if (error) {
-      setMensaje("Error al iniciar sesión: " + error.message);
-      return;
-    }
-
-    setEmail("");
-    setPassword("");
+    if (error) setMensaje(error.message);
   }
 
-  async function cerrarSesion() {
+  async function logout() {
     await supabase.auth.signOut();
     setUser(null);
-    setEntregas([]);
-    setMensaje("");
   }
 
   async function cargarEntregas() {
@@ -93,721 +77,473 @@ export default function Home() {
       .select("*")
       .order("id", { ascending: false });
 
-    if (error) {
-      setMensaje("Error al cargar entregas: " + error.message);
-      return;
-    }
-
-    setEntregas(data || []);
-  }
-
-  function fechaUY(fechaIso: string) {
-    if (!fechaIso) return "";
-    const [y, m, d] = fechaIso.split("-");
-    return `${d}/${m}/${y}`;
-  }
-
-  function limpiarFormulario() {
-    setCliente("");
-    setFecha(new Date().toISOString().slice(0, 10));
-    setFactura("");
-    setMonto("");
-    setObservaciones("");
+    if (!error && data) setEntregas(data as Entrega[]);
   }
 
   async function guardarEntrega() {
     setMensaje("");
 
-    if (!cliente.trim() || !fecha || !factura.trim() || !monto) {
-      setMensaje("Completá cliente, fecha, número de factura y monto.");
-      return;
-    }
-
-    const facturaDuplicada = entregas.some(
-      (e) =>
-        e.activo !== false &&
-        e.numero_factura.trim().toLowerCase() === factura.trim().toLowerCase()
-    );
-
-    if (facturaDuplicada) {
-      setMensaje("Esa factura ya está cargada.");
+    if (!cliente || !factura || !monto) {
+      setMensaje("Faltan datos.");
       return;
     }
 
     const { error } = await supabase.from("entregas").insert([
       {
-        cliente: cliente.trim(),
+        cliente,
         fecha_entregado: fecha,
-        numero_factura: factura.trim(),
+        numero_factura: factura,
         monto: Number(monto),
-        observaciones: observaciones.trim(),
-        activo: true,
+        observaciones,
+        estado: "a_entregar",
       },
     ]);
 
     if (error) {
-      setMensaje("Error al guardar: " + error.message);
+      setMensaje(error.message);
       return;
     }
 
-    setMensaje("Entrega guardada correctamente.");
-    limpiarFormulario();
-    cargarEntregas();
+    setCliente("");
+    setFactura("");
+    setMonto("");
+    setObservaciones("");
+
+    await cargarEntregas();
+    setMensaje("Pedido agregado.");
   }
 
-  async function actualizarEntrega() {
-    if (!editando) return;
-
-    if (!editando.cliente.trim() || !editando.fecha_entregado || !editando.numero_factura.trim()) {
-      setMensaje("Cliente, fecha y factura no pueden quedar vacíos.");
-      return;
-    }
-
-    const duplicada = entregas.some(
-      (e) =>
-        e.id !== editando.id &&
-        e.activo !== false &&
-        e.numero_factura.trim().toLowerCase() === editando.numero_factura.trim().toLowerCase()
-    );
-
-    if (duplicada) {
-      setMensaje("Esa factura ya existe en otra entrega.");
-      return;
-    }
-
-    const { error } = await supabase
-      .from("entregas")
-      .update({
-        cliente: editando.cliente.trim(),
-        fecha_entregado: editando.fecha_entregado,
-        numero_factura: editando.numero_factura.trim(),
-        monto: Number(editando.monto),
-        observaciones: editando.observaciones || "",
-      })
-      .eq("id", editando.id);
-
-    if (error) {
-      setMensaje("Error al actualizar: " + error.message);
-      return;
-    }
-
-    setMensaje("Entrega actualizada correctamente.");
-    setEditando(null);
-    cargarEntregas();
+  async function cambiarEstado(id: number, estado: Estado) {
+    await supabase.from("entregas").update({ estado }).eq("id", id);
+    await cargarEntregas();
   }
 
-  async function mandarAPapelera(id: number) {
-    const { error } = await supabase
-      .from("entregas")
-      .update({
-        activo: false,
-        eliminado_en: new Date().toISOString(),
-        eliminado_motivo: "Eliminado desde sistema",
-      })
-      .eq("id", id);
-
-    if (error) {
-      setMensaje("Error al enviar a papelera: " + error.message);
-      return;
-    }
-
-    setMensaje("Entrega enviada a papelera.");
-    setConfirmarEliminar(null);
-    setEditando(null);
-    cargarEntregas();
+  function fechaUY(fecha: string) {
+    const [y, m, d] = fecha.split("-");
+    return `${d}/${m}/${y}`;
   }
 
-  async function restaurarEntrega(id: number) {
-    const { error } = await supabase
-      .from("entregas")
-      .update({
-        activo: true,
-        eliminado_en: null,
-        eliminado_motivo: null,
-      })
-      .eq("id", id);
-
-    if (error) {
-      setMensaje("Error al restaurar: " + error.message);
-      return;
-    }
-
-    setMensaje("Entrega restaurada correctamente.");
-    cargarEntregas();
-  }
-
-  function exportarCSV(datos: Entrega[], nombre: string) {
-    const encabezados = [
-      "id",
-      "cliente",
-      "fecha_entregado",
-      "numero_factura",
-      "monto",
-      "observaciones",
-      "activo",
-      "eliminado_en",
+  function nombreMes(mes: string) {
+    const [anio, nroMes] = mes.split("-");
+    const nombres = [
+      "Enero",
+      "Febrero",
+      "Marzo",
+      "Abril",
+      "Mayo",
+      "Junio",
+      "Julio",
+      "Agosto",
+      "Setiembre",
+      "Octubre",
+      "Noviembre",
+      "Diciembre",
     ];
 
-    const filas = datos.map((e) =>
-      [
-        e.id,
-        e.cliente,
-        fechaUY(e.fecha_entregado),
-        e.numero_factura,
-        e.monto,
-        e.observaciones || "",
-        e.activo !== false ? "activo" : "papelera",
-        e.eliminado_en || "",
-      ]
-        .map((valor) => `"${String(valor).replaceAll('"', '""')}"`)
-        .join(",")
-    );
-
-    const csv = [encabezados.join(","), ...filas].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = nombre;
-    link.click();
-
-    URL.revokeObjectURL(url);
+    return `${nombres[Number(nroMes) - 1]} ${anio}`;
   }
 
-  const activas = entregas.filter((e) => e.activo !== false);
-  const papelera = entregas.filter((e) => e.activo === false);
+  const filtradas = useMemo(() => {
+    const texto = busqueda.toLowerCase();
 
-  const entregasFiltradas = useMemo(() => {
-    const texto = busqueda.toLowerCase().trim();
-    if (!texto) return activas;
-
-    return activas.filter(
+    return entregas.filter(
       (e) =>
         e.cliente?.toLowerCase().includes(texto) ||
         e.numero_factura?.toLowerCase().includes(texto)
     );
   }, [busqueda, entregas]);
 
-  const papeleraFiltrada = useMemo(() => {
-    const texto = busquedaPapelera.toLowerCase().trim();
-    if (!texto) return papelera;
+  const aEntregar = filtradas.filter((e) => e.estado === "a_entregar");
+  const pendientes = filtradas.filter((e) => e.estado === "pendiente");
+  const entregados = filtradas.filter((e) => e.estado === "entregado");
+  const papelera = filtradas.filter((e) => e.estado === "papelera");
 
-    return papelera.filter(
-      (e) =>
-        e.cliente?.toLowerCase().includes(texto) ||
-        e.numero_factura?.toLowerCase().includes(texto)
-    );
-  }, [busquedaPapelera, entregas]);
+  const mesesDisponibles = useMemo(() => {
+    const meses = entregados
+      .map((e) => e.fecha_entregado.slice(0, 7))
+      .filter(Boolean);
 
-  const hoy = new Date().toISOString().slice(0, 10);
-  const mesActual = new Date().toISOString().slice(0, 7);
+    return Array.from(new Set(meses)).sort().reverse();
+  }, [entregados]);
 
-  const entregasHoy = activas.filter((e) => e.fecha_entregado === hoy).length;
-  const entregasMes = activas.filter((e) => e.fecha_entregado?.startsWith(mesActual)).length;
-  const clientesUnicos = new Set(activas.map((e) => e.cliente)).size;
-  const facturasCargadas = new Set(activas.map((e) => e.numero_factura)).size;
+  const entregadosFiltrados = useMemo(() => {
+    const hoy = new Date();
+    const hoyIso = hoy.toISOString().slice(0, 10);
+    const mesActual = hoyIso.slice(0, 7);
 
-  if (cargandoSesion) {
+    if (filtroHistorial === "todas") {
+      return entregados;
+    }
+
+    if (filtroHistorial === "esteMes") {
+      return entregados.filter((e) => e.fecha_entregado.startsWith(mesActual));
+    }
+
+    if (filtroHistorial === "porMes") {
+      if (!mesSeleccionado) return [];
+      return entregados.filter((e) =>
+        e.fecha_entregado.startsWith(mesSeleccionado)
+      );
+    }
+
+    const fechaLimite = new Date();
+    fechaLimite.setDate(fechaLimite.getDate() - 4);
+    const limiteIso = fechaLimite.toISOString().slice(0, 10);
+
+    return entregados.filter((e) => e.fecha_entregado >= limiteIso);
+  }, [entregados, filtroHistorial, mesSeleccionado]);
+
+  if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
-        <p>Cargando...</p>
+      <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+        Cargando...
       </main>
     );
   }
 
   if (!user) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-slate-100">
-        <section className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900/80 p-8 shadow-2xl">
-          <p className="mb-2 text-sm uppercase tracking-[0.35em] text-cyan-400">
-            Acceso privado
-          </p>
-
-          <h1 className="mb-2 text-4xl font-bold">📦 Depósito Insor</h1>
-
-          <p className="mb-8 text-slate-400">
-            Ingresá con tu usuario autorizado para acceder al sistema.
-          </p>
-
-          {mensaje && (
-            <div className="mb-5 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-red-100">
-              {mensaje}
-            </div>
-          )}
-
-          <div className="grid gap-4">
-            <Input label="Email" value={email} onChange={setEmail} type="email" />
-
-            <Input
-              label="Contraseña"
-              value={password}
-              onChange={setPassword}
-              type="password"
-            />
-
-            <button
-              onClick={iniciarSesion}
-              className="rounded-xl bg-cyan-500 px-5 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400"
-            >
-              Iniciar sesión
-            </button>
-          </div>
-        </section>
-      </main>
-    );
+    return <LoginScreen onLogin={login} mensaje={mensaje} />;
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.35em] text-cyan-400">
-              Sistema de entregas
-            </p>
-            <h1 className="text-4xl font-bold md:text-5xl">📦 Depósito Insor</h1>
-            <p className="text-slate-400">
-              Control online de entregas, pedidos, historial y papelera.
-            </p>
+    <main className="min-h-screen bg-slate-950 text-white">
+      <div className="flex">
+        <aside className="w-72 min-h-screen bg-slate-900 border-r border-slate-800 p-6">
+          <h1 className="text-4xl font-bold mb-2">📦 Depósito</h1>
+
+          <p className="text-slate-400 mb-8">
+            Sistema de reparto y entregas
+          </p>
+
+          <div className="space-y-4">
+            <Card titulo="🚚 A entregar" valor={aEntregar.length} color="bg-cyan-500" />
+            <Card titulo="⏳ Pendientes" valor={pendientes.length} color="bg-yellow-500" />
+            <Card titulo="✅ Entregados" valor={entregados.length} color="bg-emerald-500" />
+            <Card titulo="🗑️ Papelera" valor={papelera.length} color="bg-red-500" />
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-slate-300">
+          <div className="mt-10 text-sm text-slate-400">
             <p>{user.email}</p>
+
             <button
-              onClick={cerrarSesion}
-              className="mt-2 rounded-lg bg-slate-800 px-3 py-2 text-xs hover:bg-slate-700"
+              onClick={logout}
+              className="mt-3 bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-xl"
             >
               Cerrar sesión
             </button>
           </div>
-        </header>
+        </aside>
 
-        {mensaje && (
-          <div className="mb-6 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-5 py-4 text-cyan-100">
-            {mensaje}
-          </div>
-        )}
-
-        <section className="mb-8 grid gap-4 md:grid-cols-4">
-          <Card titulo="Entregas de hoy" valor={entregasHoy} />
-          <Card titulo="Entregas del mes" valor={entregasMes} />
-          <Card titulo="Clientes únicos" valor={clientesUnicos} />
-          <Card titulo="Facturas cargadas" valor={facturasCargadas} />
-        </section>
-
-        <nav className="mb-8 flex flex-wrap gap-3">
-          <BotonVista activo={vista === "inicio"} onClick={() => setVista("inicio")}>
-            ➕ Nueva entrega
-          </BotonVista>
-          <BotonVista activo={vista === "historial"} onClick={() => setVista("historial")}>
-            📋 Historial
-          </BotonVista>
-          <BotonVista activo={vista === "papelera"} onClick={() => setVista("papelera")}>
-            🗑️ Papelera ({papelera.length})
-          </BotonVista>
-        </nav>
-
-        {vista === "inicio" && (
-          <section className="grid gap-6 lg:grid-cols-[420px_1fr]">
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl">
-              <h2 className="mb-5 text-2xl font-semibold">Nueva entrega</h2>
-
-              <div className="grid gap-4">
-                <Input label="Cliente" value={cliente} onChange={setCliente} />
-                <Input label="Fecha de entregado" type="date" value={fecha} onChange={setFecha} />
-                <Input label="Número de factura" value={factura} onChange={setFactura} />
-                <Input label="Monto" type="number" value={monto} onChange={setMonto} />
-
-                <label className="grid gap-2 text-sm text-slate-300">
-                  Observaciones
-                  <textarea
-                    value={observaciones}
-                    onChange={(e) => setObservaciones(e.target.value)}
-                    className="h-28 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none focus:border-cyan-400"
-                  />
-                </label>
-
-                <button
-                  onClick={guardarEntrega}
-                  className="rounded-xl bg-cyan-500 px-5 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400"
-                >
-                  Guardar entrega
-                </button>
-              </div>
+        <section className="flex-1 p-8">
+          <div className="flex flex-col lg:flex-row gap-5 justify-between mb-8">
+            <div>
+              <h2 className="text-5xl font-bold">Dashboard</h2>
+              <p className="text-slate-400 mt-2">
+                Gestión de pedidos y entregas
+              </p>
             </div>
 
-            <PanelUltimas entregas={activas.slice(0, 6)} fechaUY={fechaUY} />
-          </section>
-        )}
+            <input
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar cliente o factura..."
+              className="bg-slate-900 border border-slate-700 rounded-2xl px-5 py-4 w-full lg:w-96"
+            />
+          </div>
 
-        {vista === "historial" && (
-          <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl">
-            <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          {mensaje && (
+            <div className="bg-cyan-500/20 border border-cyan-500 text-cyan-100 px-5 py-4 rounded-2xl mb-6">
+              {mensaje}
+            </div>
+          )}
+
+          <section className="bg-slate-900 rounded-3xl border border-slate-800 p-6 mb-10">
+            <h3 className="text-2xl font-bold mb-6">➕ Nuevo pedido</h3>
+
+            <div className="grid lg:grid-cols-2 gap-5">
+              <Input placeholder="Cliente" value={cliente} onChange={setCliente} />
+              <Input placeholder="Número de factura" value={factura} onChange={setFactura} />
+              <Input type="date" value={fecha} onChange={setFecha} />
+              <Input type="number" placeholder="Monto" value={monto} onChange={setMonto} />
+            </div>
+
+            <textarea
+              placeholder="Observaciones"
+              value={observaciones}
+              onChange={(e) => setObservaciones(e.target.value)}
+              className="w-full mt-5 bg-slate-950 border border-slate-700 rounded-2xl p-5 h-32"
+            />
+
+            <button
+              onClick={guardarEntrega}
+              className="mt-5 bg-cyan-500 hover:bg-cyan-400 text-black font-bold px-6 py-4 rounded-2xl"
+            >
+              Guardar pedido
+            </button>
+          </section>
+
+          <GridSection
+            titulo="🚚 Pedidos a entregar"
+            color="border-cyan-500"
+            entregas={aEntregar}
+            fechaUY={fechaUY}
+            acciones={(e) => (
+              <div className="flex gap-2 flex-wrap">
+                <Boton texto="✅ Entregado" color="bg-emerald-500" onClick={() => cambiarEstado(e.id, "entregado")} />
+                <Boton texto="⏳ Pendiente" color="bg-yellow-500" onClick={() => cambiarEstado(e.id, "pendiente")} />
+                <Boton texto="🗑️ Papelera" color="bg-red-500" onClick={() => cambiarEstado(e.id, "papelera")} />
+              </div>
+            )}
+          />
+
+          <GridSection
+            titulo="⏳ Pedidos pendientes"
+            color="border-yellow-500"
+            entregas={pendientes}
+            fechaUY={fechaUY}
+            acciones={(e) => (
+              <div className="flex gap-2 flex-wrap">
+                <Boton texto="🚚 Volver a entregar" color="bg-cyan-500" onClick={() => cambiarEstado(e.id, "a_entregar")} />
+                <Boton texto="✅ Entregado" color="bg-emerald-500" onClick={() => cambiarEstado(e.id, "entregado")} />
+              </div>
+            )}
+          />
+
+          <section className="bg-slate-900 border border-emerald-500 rounded-3xl p-6 mb-8">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 mb-6">
               <div>
-                <h2 className="text-2xl font-semibold">Historial</h2>
-                <p className="text-sm text-slate-400">Buscar por cliente o número de factura.</p>
+                <h2 className="text-2xl font-bold">✅ Historial entregado</h2>
+                <p className="text-slate-400">
+                  Mostrando {entregadosFiltrados.length} entregas
+                </p>
               </div>
 
-              <div className="flex flex-col gap-3 md:flex-row">
-                <input
-                  value={busqueda}
-                  onChange={(e) => setBusqueda(e.target.value)}
-                  placeholder="Buscar..."
-                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none focus:border-cyan-400"
-                />
-
-                <button
-                  onClick={() => exportarCSV(entregasFiltradas, "historial_entregas.csv")}
-                  className="rounded-xl bg-emerald-500 px-4 py-3 font-semibold text-slate-950 hover:bg-emerald-400"
+              <div className="flex flex-col md:flex-row gap-3">
+                <select
+                  value={filtroHistorial}
+                  onChange={(e) =>
+                    setFiltroHistorial(e.target.value as FiltroHistorial)
+                  }
+                  className="bg-slate-950 border border-slate-700 rounded-2xl px-5 py-3"
                 >
-                  Exportar CSV
-                </button>
+                  <option value="ultimos5">Últimos 5 días</option>
+                  <option value="esteMes">Este mes</option>
+                  <option value="porMes">Por mes</option>
+                  <option value="todas">Todas</option>
+                </select>
+
+                {filtroHistorial === "porMes" && (
+                  <select
+                    value={mesSeleccionado}
+                    onChange={(e) => setMesSeleccionado(e.target.value)}
+                    className="bg-slate-950 border border-slate-700 rounded-2xl px-5 py-3"
+                  >
+                    <option value="">Seleccionar mes</option>
+                    {mesesDisponibles.map((mes) => (
+                      <option key={mes} value={mes}>
+                        {nombreMes(mes)}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
 
             <TablaEntregas
-              entregas={entregasFiltradas}
+              entregas={entregadosFiltrados}
               fechaUY={fechaUY}
-              onEditar={setEditando}
+              acciones={(e) => (
+                <Boton texto="🗑️ Papelera" color="bg-red-500" onClick={() => cambiarEstado(e.id, "papelera")} />
+              )}
             />
           </section>
-        )}
 
-        {vista === "papelera" && (
-          <section className="rounded-3xl border border-red-500/30 bg-slate-900/70 p-6 shadow-xl">
-            <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-2xl font-semibold">🗑️ Papelera</h2>
-                <p className="text-sm text-slate-400">
-                  Entregas eliminadas. Podés restaurarlas o exportarlas.
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-3 md:flex-row">
-                <input
-                  value={busquedaPapelera}
-                  onChange={(e) => setBusquedaPapelera(e.target.value)}
-                  placeholder="Buscar en papelera..."
-                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none focus:border-red-400"
-                />
-
-                <button
-                  onClick={() => exportarCSV(papeleraFiltrada, "papelera_entregas.csv")}
-                  className="rounded-xl bg-red-500 px-4 py-3 font-semibold text-white hover:bg-red-400"
-                >
-                  Exportar papelera
-                </button>
-              </div>
-            </div>
-
-            <TablaPapelera
-              entregas={papeleraFiltrada}
-              fechaUY={fechaUY}
-              onRestaurar={restaurarEntrega}
-            />
-          </section>
-        )}
-
-        {editando && (
-          <section className="mt-8 rounded-3xl border border-cyan-500/30 bg-slate-900 p-6">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-2xl font-semibold">Editar entrega</h2>
-              <button
-                onClick={() => setEditando(null)}
-                className="rounded-lg bg-slate-800 px-3 py-2 text-sm hover:bg-slate-700"
-              >
-                Cerrar
-              </button>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <Input
-                label="Cliente"
-                value={editando.cliente}
-                onChange={(v) => setEditando({ ...editando, cliente: v })}
-              />
-
-              <Input
-                label="Fecha"
-                type="date"
-                value={editando.fecha_entregado}
-                onChange={(v) => setEditando({ ...editando, fecha_entregado: v })}
-              />
-
-              <Input
-                label="Número de factura"
-                value={editando.numero_factura}
-                onChange={(v) => setEditando({ ...editando, numero_factura: v })}
-              />
-
-              <Input
-                label="Monto"
-                type="number"
-                value={String(editando.monto)}
-                onChange={(v) => setEditando({ ...editando, monto: Number(v) })}
-              />
-
-              <label className="grid gap-2 text-sm text-slate-300 md:col-span-2">
-                Observaciones
-                <textarea
-                  value={editando.observaciones || ""}
-                  onChange={(e) =>
-                    setEditando({ ...editando, observaciones: e.target.value })
-                  }
-                  className="h-24 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none focus:border-cyan-400"
-                />
-              </label>
-            </div>
-
-            <div className="mt-5 flex flex-col gap-3 md:flex-row">
-              <button
-                onClick={actualizarEntrega}
-                className="rounded-xl bg-emerald-500 px-5 py-3 font-semibold text-slate-950 hover:bg-emerald-400"
-              >
-                Actualizar entrega
-              </button>
-
-              <button
-                onClick={() => setConfirmarEliminar(editando.id)}
-                className="rounded-xl bg-red-500 px-5 py-3 font-semibold text-white hover:bg-red-400"
-              >
-                Enviar a papelera
-              </button>
-            </div>
-
-            {confirmarEliminar === editando.id && (
-              <div className="mt-5 rounded-2xl border border-red-500/40 bg-red-500/10 p-5">
-                <p className="mb-4 text-red-200">
-                  ¿Seguro que querés enviar a papelera la factura {editando.numero_factura} de{" "}
-                  {editando.cliente}?
-                </p>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => mandarAPapelera(editando.id)}
-                    className="rounded-xl bg-red-600 px-4 py-2 font-semibold text-white"
-                  >
-                    Sí, enviar
-                  </button>
-
-                  <button
-                    onClick={() => setConfirmarEliminar(null)}
-                    className="rounded-xl bg-slate-800 px-4 py-2"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
+          <GridSection
+            titulo="🗑️ Papelera"
+            color="border-red-500"
+            entregas={papelera}
+            fechaUY={fechaUY}
+            acciones={(e) => (
+              <Boton texto="♻️ Restaurar" color="bg-cyan-500" onClick={() => cambiarEstado(e.id, "a_entregar")} />
             )}
-          </section>
-        )}
+          />
+        </section>
       </div>
     </main>
   );
 }
 
-function Card({ titulo, valor }: { titulo: string; valor: number }) {
+function LoginScreen({
+  onLogin,
+  mensaje,
+}: {
+  onLogin: (email: string, password: string) => void;
+  mensaje: string;
+}) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
   return (
-    <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-xl">
-      <p className="text-sm text-slate-400">{titulo}</p>
-      <p className="mt-2 text-4xl font-bold text-cyan-300">{valor}</p>
+    <main className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-10 w-full max-w-lg">
+        <p className="text-cyan-400 tracking-[0.4em] text-sm mb-3">
+          ACCESO PRIVADO
+        </p>
+
+        <h1 className="text-5xl font-bold mb-5">📦 Depósito Insor</h1>
+
+        <p className="text-slate-400 mb-8">Ingresá con usuario autorizado.</p>
+
+        {mensaje && (
+          <div className="bg-red-500/20 border border-red-500 text-red-100 p-4 rounded-2xl mb-6">
+            {mensaje}
+          </div>
+        )}
+
+        <div className="space-y-5">
+          <Input placeholder="Email" value={email} onChange={setEmail} />
+          <Input type="password" placeholder="Contraseña" value={password} onChange={setPassword} />
+
+          <button
+            onClick={() => onLogin(email, password)}
+            className="w-full bg-cyan-500 hover:bg-cyan-400 text-black font-bold py-4 rounded-2xl"
+          >
+            Iniciar sesión
+          </button>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function Card({
+  titulo,
+  valor,
+  color,
+}: {
+  titulo: string;
+  valor: number;
+  color: string;
+}) {
+  return (
+    <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5">
+      <div className={`w-3 h-3 rounded-full ${color} mb-3`} />
+      <p className="text-slate-400 text-sm">{titulo}</p>
+      <h3 className="text-4xl font-bold mt-2">{valor}</h3>
     </div>
   );
 }
 
-function BotonVista({
-  activo,
-  onClick,
-  children,
-}: {
-  activo: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-2xl px-5 py-3 font-semibold transition ${
-        activo
-          ? "bg-cyan-500 text-slate-950"
-          : "bg-slate-900 text-slate-300 hover:bg-slate-800"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
 function Input({
-  label,
+  placeholder,
   value,
   onChange,
   type = "text",
 }: {
-  label: string;
+  placeholder?: string;
   value: string;
-  onChange: (value: string) => void;
+  onChange: (v: string) => void;
   type?: string;
 }) {
   return (
-    <label className="grid gap-2 text-sm text-slate-300">
-      {label}
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none focus:border-cyan-400"
-      />
-    </label>
+    <input
+      type={type}
+      placeholder={placeholder}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="bg-slate-950 border border-slate-700 rounded-2xl px-5 py-4 w-full"
+    />
+  );
+}
+
+function Boton({
+  texto,
+  color,
+  onClick,
+}: {
+  texto: string;
+  color: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`${color} hover:opacity-90 text-black font-bold px-4 py-2 rounded-xl`}
+    >
+      {texto}
+    </button>
+  );
+}
+
+function GridSection({
+  titulo,
+  color,
+  entregas,
+  fechaUY,
+  acciones,
+}: {
+  titulo: string;
+  color: string;
+  entregas: Entrega[];
+  fechaUY: (fecha: string) => string;
+  acciones: (e: Entrega) => React.ReactNode;
+}) {
+  return (
+    <section className={`bg-slate-900 border ${color} rounded-3xl p-6 mb-8`}>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold">{titulo}</h2>
+        <p className="text-slate-400">{entregas.length} pedidos</p>
+      </div>
+
+      <TablaEntregas entregas={entregas} fechaUY={fechaUY} acciones={acciones} />
+    </section>
   );
 }
 
 function TablaEntregas({
   entregas,
   fechaUY,
-  onEditar,
+  acciones,
 }: {
   entregas: Entrega[];
   fechaUY: (fecha: string) => string;
-  onEditar: (entrega: Entrega) => void;
+  acciones: (e: Entrega) => React.ReactNode;
 }) {
   return (
-    <div className="overflow-x-auto rounded-2xl border border-slate-800">
-      <table className="w-full min-w-[760px] text-left text-sm">
-        <thead className="bg-slate-950 text-slate-300">
-          <tr>
-            <th className="px-4 py-3">Fecha</th>
-            <th className="px-4 py-3">Cliente</th>
-            <th className="px-4 py-3">Factura</th>
-            <th className="px-4 py-3">Monto</th>
-            <th className="px-4 py-3">Observaciones</th>
-            <th className="px-4 py-3">Acciones</th>
+    <div className="overflow-auto">
+      <table className="w-full min-w-[900px]">
+        <thead>
+          <tr className="text-left border-b border-slate-800 text-slate-400">
+            <th className="pb-4">Cliente</th>
+            <th className="pb-4">Factura</th>
+            <th className="pb-4">Fecha</th>
+            <th className="pb-4">Monto</th>
+            <th className="pb-4">Observaciones</th>
+            <th className="pb-4">Acciones</th>
           </tr>
         </thead>
 
         <tbody>
           {entregas.map((e) => (
-            <tr key={e.id} className="border-t border-slate-800">
-              <td className="px-4 py-3">{fechaUY(e.fecha_entregado)}</td>
-              <td className="px-4 py-3 font-medium">{e.cliente}</td>
-              <td className="px-4 py-3">{e.numero_factura}</td>
-              <td className="px-4 py-3">$ {Number(e.monto).toFixed(2)}</td>
-              <td className="px-4 py-3 text-slate-400">{e.observaciones}</td>
-              <td className="px-4 py-3">
-                <button
-                  onClick={() => onEditar(e)}
-                  className="rounded-lg bg-slate-800 px-3 py-2 text-xs hover:bg-slate-700"
-                >
-                  Editar
-                </button>
-              </td>
+            <tr key={e.id} className="border-b border-slate-800">
+              <td className="py-5 font-semibold">{e.cliente}</td>
+              <td>{e.numero_factura}</td>
+              <td>{fechaUY(e.fecha_entregado)}</td>
+              <td>$ {Number(e.monto).toFixed(2)}</td>
+              <td className="text-slate-400">{e.observaciones}</td>
+              <td>{acciones(e)}</td>
             </tr>
           ))}
 
           {entregas.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
-                No hay entregas para mostrar.
+              <td colSpan={6} className="py-8 text-center text-slate-500">
+                No hay pedidos para mostrar.
               </td>
             </tr>
           )}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function TablaPapelera({
-  entregas,
-  fechaUY,
-  onRestaurar,
-}: {
-  entregas: Entrega[];
-  fechaUY: (fecha: string) => string;
-  onRestaurar: (id: number) => void;
-}) {
-  return (
-    <div className="overflow-x-auto rounded-2xl border border-slate-800">
-      <table className="w-full min-w-[850px] text-left text-sm">
-        <thead className="bg-slate-950 text-slate-300">
-          <tr>
-            <th className="px-4 py-3">Fecha</th>
-            <th className="px-4 py-3">Cliente</th>
-            <th className="px-4 py-3">Factura</th>
-            <th className="px-4 py-3">Monto</th>
-            <th className="px-4 py-3">Eliminado</th>
-            <th className="px-4 py-3">Acciones</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {entregas.map((e) => (
-            <tr key={e.id} className="border-t border-slate-800">
-              <td className="px-4 py-3">{fechaUY(e.fecha_entregado)}</td>
-              <td className="px-4 py-3 font-medium">{e.cliente}</td>
-              <td className="px-4 py-3">{e.numero_factura}</td>
-              <td className="px-4 py-3">$ {Number(e.monto).toFixed(2)}</td>
-              <td className="px-4 py-3 text-slate-400">
-                {e.eliminado_en ? new Date(e.eliminado_en).toLocaleString("es-UY") : "-"}
-              </td>
-              <td className="px-4 py-3">
-                <button
-                  onClick={() => onRestaurar(e.id)}
-                  className="rounded-lg bg-emerald-500 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
-                >
-                  Restaurar
-                </button>
-              </td>
-            </tr>
-          ))}
-
-          {entregas.length === 0 && (
-            <tr>
-              <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
-                La papelera está vacía.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function PanelUltimas({
-  entregas,
-  fechaUY,
-}: {
-  entregas: Entrega[];
-  fechaUY: (fecha: string) => string;
-}) {
-  return (
-    <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl">
-      <h2 className="mb-5 text-2xl font-semibold">Últimas entregas</h2>
-
-      <div className="grid gap-3">
-        {entregas.map((e) => (
-          <div
-            key={e.id}
-            className="rounded-2xl border border-slate-800 bg-slate-950 p-4"
-          >
-            <div className="flex justify-between gap-3">
-              <div>
-                <p className="font-semibold">{e.cliente}</p>
-                <p className="text-sm text-slate-400">
-                  Factura {e.numero_factura} · {fechaUY(e.fecha_entregado)}
-                </p>
-              </div>
-              <p className="text-sm text-cyan-300">$ {Number(e.monto).toFixed(2)}</p>
-            </div>
-          </div>
-        ))}
-
-        {entregas.length === 0 && (
-          <p className="text-slate-400">Todavía no hay entregas cargadas.</p>
-        )}
-      </div>
     </div>
   );
 }

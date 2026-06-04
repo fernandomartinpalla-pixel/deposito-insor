@@ -469,13 +469,6 @@ async function guardarClienteAutomatico(
     } ${anio}`;
   }
 
-  function obtenerSeleccionado() {
-    return (
-      entregas.find(
-        (e) => e.id === seleccionados
-      ) || null
-    );
-  }
 
 const pedidosSeleccionados = useMemo(() => {
   return entregas.filter((e) => seleccionados.includes(e.id));
@@ -1778,9 +1771,9 @@ onSeleccionar: (id: number) => void;
                 <input
                   type="checkbox"
                   checked={seleccionados.includes(e.id)}
-                  onChange={(ev) =>
-                   toggleSeleccion(e.id)
-                  }
+                 onChange={() =>
+                 onSeleccionar(e.id)
+                }
                   className="h-5 w-5"
                 />
               </td>

@@ -472,7 +472,7 @@ async function guardarClienteAutomatico(
   function obtenerSeleccionado() {
     return (
       entregas.find(
-        (e) => e.id === seleccionadoId
+        (e) => e.id === seleccionados
       ) || null
     );
   }
@@ -1355,8 +1355,8 @@ const pedidoSeleccionado = pedidosSeleccionados[0] || null;
             entregas={aEntregar}
             fechaUY={fechaUY}
             usd={usd}
-            seleccionadoId={seleccionadoId}
-            onSeleccionar={setSeleccionadoId}
+            seleccionados={seleccionados}
+            onSeleccionar={toggleSeleccion}
           />
 
           <GridSection
@@ -1365,8 +1365,9 @@ const pedidoSeleccionado = pedidosSeleccionados[0] || null;
             entregas={pendientes}
             fechaUY={fechaUY}
             usd={usd}
-            seleccionadoId={seleccionadoId}
-            onSeleccionar={setSeleccionadoId}
+            seleccionados={seleccionados}
+            onSeleccionar={toggleSeleccion}
+          
           />
 
           <section className="bg-slate-900 border border-emerald-500 rounded-3xl p-6 mb-8">
@@ -1413,8 +1414,8 @@ const pedidoSeleccionado = pedidosSeleccionados[0] || null;
               entregas={entregadosFiltrados}
               fechaUY={fechaUY}
               usd={usd}
-              seleccionadoId={seleccionadoId}
-              onSeleccionar={setSeleccionadoId}
+              seleccionados={seleccionados}
+              onSeleccionar={toggleSeleccion}
             />
           </section>
 
@@ -1424,8 +1425,8 @@ const pedidoSeleccionado = pedidosSeleccionados[0] || null;
             entregas={papelera}
             fechaUY={fechaUY}
             usd={usd}
-            seleccionadoId={seleccionadoId}
-            onSeleccionar={setSeleccionadoId}
+            seleccionados={seleccionados}
+            onSeleccionar={toggleSeleccion}
           />
         </section>
       </div>
@@ -1714,7 +1715,7 @@ function GridSection({
   entregas,
   fechaUY,
   usd,
-  seleccionadoId,
+  seleccionados,
   onSeleccionar,
 }: {
   titulo: string;
@@ -1722,8 +1723,8 @@ function GridSection({
   entregas: Entrega[];
   fechaUY: (fecha?: string | null) => string;
   usd: (valor: number) => string;
-  seleccionadoId: number | null;
-  onSeleccionar: (id: number | null) => void;
+  seleccionados: number[];
+onSeleccionar: (id: number) => void;
 }) {
   return (
     <section className={`bg-slate-900 border ${color} rounded-3xl p-6 mb-8`}>
@@ -1736,7 +1737,7 @@ function GridSection({
         entregas={entregas}
         fechaUY={fechaUY}
         usd={usd}
-        seleccionadoId={seleccionadoId}
+        seleccionados={seleccionados}
         onSeleccionar={onSeleccionar}
       />
     </section>
@@ -1747,14 +1748,14 @@ function TablaEntregas({
   entregas,
   fechaUY,
   usd,
-  seleccionadoId,
+  seleccionados,
   onSeleccionar,
 }: {
   entregas: Entrega[];
   fechaUY: (fecha?: string | null) => string;
   usd: (valor: number) => string;
-  seleccionadoId: number | null;
-  onSeleccionar: (id: number | null) => void;
+seleccionados: number[];
+onSeleccionar: (id: number) => void;
 }) {
   return (
     <div className="overflow-auto">

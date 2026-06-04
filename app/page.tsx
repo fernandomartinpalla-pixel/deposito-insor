@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import type { User } from "@supabase/supabase-js";
 
 type Entrega = {
   id: number;
@@ -17,6 +18,11 @@ type Entrega = {
 };
 
 export default function Home() {
+  const [user, setUser] = useState<User | null>(null);
+  const [cargandoSesion, setCargandoSesion] = useState(true);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [cliente, setCliente] = useState("");
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
@@ -32,8 +38,54 @@ export default function Home() {
   const [vista, setVista] = useState<"inicio" | "historial" | "papelera">("inicio");
 
   useEffect(() => {
-    cargarEntregas();
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null);
+      setCargandoSesion(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      cargarEntregas();
+    }
+  }, [user]);
+
+  async function iniciarSesion() {
+    setMensaje("");
+
+    if (!email || !password) {
+      setMensaje("Ingresá email y contraseña.");
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      setMensaje("Error al iniciar sesión: " + error.message);
+      return;
+    }
+
+    setEmail("");
+    setPassword("");
+  }
+
+  async function cerrarSesion() {
+    await supabase.auth.signOut();
+    setUser(null);
+    setEntregas([]);
+    setMensaje("");
+  }
 
   async function cargarEntregas() {
     const { data, error } = await supabase
@@ -256,17 +308,79 @@ export default function Home() {
   const clientesUnicos = new Set(activas.map((e) => e.cliente)).size;
   const facturasCargadas = new Set(activas.map((e) => e.numero_factura)).size;
 
+  if (cargandoSesion) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
+        <p>Cargando...</p>
+      </main>
+    );
+  }
+
+  if (!user) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-slate-100">
+        <section className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900/80 p-8 shadow-2xl">
+          <p className="mb-2 text-sm uppercase tracking-[0.35em] text-cyan-400">
+            Acceso privado
+          </p>
+
+          <h1 className="mb-2 text-4xl font-bold">📦 Depósito Insor</h1>
+
+          <p className="mb-8 text-slate-400">
+            Ingresá con tu usuario autorizado para acceder al sistema.
+          </p>
+
+          {mensaje && (
+            <div className="mb-5 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-red-100">
+              {mensaje}
+            </div>
+          )}
+
+          <div className="grid gap-4">
+            <Input label="Email" value={email} onChange={setEmail} type="email" />
+
+            <Input
+              label="Contraseña"
+              value={password}
+              onChange={setPassword}
+              type="password"
+            />
+
+            <button
+              onClick={iniciarSesion}
+              className="rounded-xl bg-cyan-500 px-5 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400"
+            >
+              Iniciar sesión
+            </button>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto max-w-7xl px-6 py-8">
-        <header className="mb-8 flex flex-col gap-2">
-          <p className="text-sm uppercase tracking-[0.35em] text-cyan-400">
-            Sistema de entregas
-          </p>
-          <h1 className="text-4xl font-bold md:text-5xl">📦 Depósito Insor</h1>
-          <p className="text-slate-400">
-            Control online de entregas, pedidos, historial y papelera.
-          </p>
+        <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-sm uppercase tracking-[0.35em] text-cyan-400">
+              Sistema de entregas
+            </p>
+            <h1 className="text-4xl font-bold md:text-5xl">📦 Depósito Insor</h1>
+            <p className="text-slate-400">
+              Control online de entregas, pedidos, historial y papelera.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-slate-300">
+            <p>{user.email}</p>
+            <button
+              onClick={cerrarSesion}
+              className="mt-2 rounded-lg bg-slate-800 px-3 py-2 text-xs hover:bg-slate-700"
+            >
+              Cerrar sesión
+            </button>
+          </div>
         </header>
 
         {mensaje && (
@@ -387,49 +501,11 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-2xl border border-slate-800">
-              <table className="w-full min-w-[850px] text-left text-sm">
-                <thead className="bg-slate-950 text-slate-300">
-                  <tr>
-                    <th className="px-4 py-3">Fecha</th>
-                    <th className="px-4 py-3">Cliente</th>
-                    <th className="px-4 py-3">Factura</th>
-                    <th className="px-4 py-3">Monto</th>
-                    <th className="px-4 py-3">Eliminado</th>
-                    <th className="px-4 py-3">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {papeleraFiltrada.map((e) => (
-                    <tr key={e.id} className="border-t border-slate-800">
-                      <td className="px-4 py-3">{fechaUY(e.fecha_entregado)}</td>
-                      <td className="px-4 py-3 font-medium">{e.cliente}</td>
-                      <td className="px-4 py-3">{e.numero_factura}</td>
-                      <td className="px-4 py-3">$ {Number(e.monto).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-slate-400">
-                        {e.eliminado_en ? new Date(e.eliminado_en).toLocaleString("es-UY") : "-"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={() => restaurarEntrega(e.id)}
-                          className="rounded-lg bg-emerald-500 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
-                        >
-                          Restaurar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-
-                  {papeleraFiltrada.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
-                        La papelera está vacía.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <TablaPapelera
+              entregas={papeleraFiltrada}
+              fechaUY={fechaUY}
+              onRestaurar={restaurarEntrega}
+            />
           </section>
         )}
 
@@ -633,6 +709,63 @@ function TablaEntregas({
             <tr>
               <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
                 No hay entregas para mostrar.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function TablaPapelera({
+  entregas,
+  fechaUY,
+  onRestaurar,
+}: {
+  entregas: Entrega[];
+  fechaUY: (fecha: string) => string;
+  onRestaurar: (id: number) => void;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-slate-800">
+      <table className="w-full min-w-[850px] text-left text-sm">
+        <thead className="bg-slate-950 text-slate-300">
+          <tr>
+            <th className="px-4 py-3">Fecha</th>
+            <th className="px-4 py-3">Cliente</th>
+            <th className="px-4 py-3">Factura</th>
+            <th className="px-4 py-3">Monto</th>
+            <th className="px-4 py-3">Eliminado</th>
+            <th className="px-4 py-3">Acciones</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {entregas.map((e) => (
+            <tr key={e.id} className="border-t border-slate-800">
+              <td className="px-4 py-3">{fechaUY(e.fecha_entregado)}</td>
+              <td className="px-4 py-3 font-medium">{e.cliente}</td>
+              <td className="px-4 py-3">{e.numero_factura}</td>
+              <td className="px-4 py-3">$ {Number(e.monto).toFixed(2)}</td>
+              <td className="px-4 py-3 text-slate-400">
+                {e.eliminado_en ? new Date(e.eliminado_en).toLocaleString("es-UY") : "-"}
+              </td>
+              <td className="px-4 py-3">
+                <button
+                  onClick={() => onRestaurar(e.id)}
+                  className="rounded-lg bg-emerald-500 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
+                >
+                  Restaurar
+                </button>
+              </td>
+            </tr>
+          ))}
+
+          {entregas.length === 0 && (
+            <tr>
+              <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                La papelera está vacía.
               </td>
             </tr>
           )}

@@ -313,145 +313,408 @@ export default function Home() {
     return `${nombres[Number(nroMes) - 1]} ${anio}`;
   }
 
-  function imprimirEtiqueta(pedido: Entrega) {
-    const ventana = window.open("", "_blank");
+ function imprimirEtiqueta(pedido: Entrega) {
+  const ventana = window.open("", "_blank");
 
-    if (!ventana) {
-      setMensaje("El navegador bloqueó la ventana de impresión.");
-      return;
-    }
+  if (!ventana) {
+    setMensaje("El navegador bloqueó la ventana de impresión.");
+    return;
+  }
 
-    ventana.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Etiqueta ${pedido.numero_factura}</title>
-          <style>
-            @page {
-              size: A4;
-              margin: 18mm;
-            }
+  const fecha = new Date().toLocaleDateString("es-UY");
 
+  ventana.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Etiqueta ${pedido.numero_factura}</title>
+
+        <style>
+          @page {
+            size: A4 portrait;
+            margin: 10mm;
+          }
+
+          body {
+            font-family: Arial, sans-serif;
+            background: white;
+            margin: 0;
+            padding: 0;
+            color: #111;
+          }
+
+          .sheet {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+          }
+
+          .etiqueta {
+            border: 3px solid #111;
+            padding: 16px;
+          }
+
+          .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: stretch;
+            gap: 12px;
+            margin-bottom: 14px;
+          }
+
+          .logo {
+            width: 180px;
+            border: 2px solid #111;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 34px;
+            font-weight: 900;
+          }
+
+          .empresa {
+            flex: 1;
+            border: 2px solid #111;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: 900;
+            text-align: center;
+            padding: 10px;
+          }
+
+          .fecha {
+            width: 170px;
+            border: 2px solid #111;
+            padding: 10px;
+            box-sizing: border-box;
+          }
+
+          .fecha-title {
+            font-size: 15px;
+            font-weight: 900;
+            margin-bottom: 8px;
+          }
+
+          .fecha-value {
+            font-size: 26px;
+            font-weight: 700;
+          }
+
+          .middle {
+            display: flex;
+            gap: 18px;
+            margin-bottom: 18px;
+          }
+
+          .box {
+            flex: 1;
+            border: 2px solid #111;
+            padding: 14px;
+            min-height: 290px;
+            box-sizing: border-box;
+          }
+
+          .box-title {
+            font-size: 18px;
+            font-weight: 900;
+            text-align: center;
+            text-decoration: underline;
+            margin-bottom: 20px;
+          }
+
+          .line {
+            margin-bottom: 20px;
+          }
+
+          .label {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+          }
+
+          .value {
+            font-size: 24px;
+            font-weight: 700;
+            line-height: 1.3;
+            word-break: break-word;
+          }
+
+          .small {
+            font-size: 20px;
+          }
+
+          .bottom-grid {
+            display: flex;
+            gap: 18px;
+            margin-bottom: 18px;
+          }
+
+          .small-box {
+            flex: 1;
+            border: 2px solid #111;
+            padding: 14px;
+            min-height: 85px;
+            box-sizing: border-box;
+          }
+
+          .warning {
+            border: 3px solid #111;
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+          }
+
+          .warning-title {
+            font-size: 26px;
+            font-weight: 900;
+            margin-bottom: 18px;
+          }
+
+          .warning-sub {
+            font-size: 16px;
+            font-weight: 700;
+            text-decoration: underline;
+            line-height: 1.5;
+          }
+
+          .fragil {
+            width: 170px;
+            height: 170px;
+            border: 3px solid #111;
+            background: #d60000;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            text-align: center;
+            box-sizing: border-box;
+          }
+
+          .fragil-top {
+            font-size: 38px;
+            margin-bottom: 10px;
+          }
+
+          .fragil-icon {
+            font-size: 70px;
+            line-height: 1;
+          }
+
+          .fragil-bottom {
+            font-size: 34px;
+            margin-top: 10px;
+          }
+
+          .obs {
+            margin-top: 18px;
+            border: 2px dashed #111;
+            padding: 12px;
+          }
+
+          .obs-title {
+            font-size: 16px;
+            font-weight: 900;
+            margin-bottom: 8px;
+          }
+
+          .obs-text {
+            font-size: 16px;
+            line-height: 1.5;
+          }
+
+          @media print {
             body {
-              font-family: Arial, sans-serif;
-              margin: 0;
-              background: white;
-              color: #111;
+              print-color-adjust: exact;
+              -webkit-print-color-adjust: exact;
             }
+          }
+        </style>
+      </head>
 
-            .label {
-              width: 10cm;
-              min-height: 15cm;
-              border: 2px solid #111;
-              padding: 18px;
-              box-sizing: border-box;
-            }
+      <body>
+        <div class="sheet">
 
-            .brand {
-              font-size: 28px;
-              font-weight: 900;
-              letter-spacing: 1px;
-              margin-bottom: 4px;
-            }
+          <div class="etiqueta">
 
-            .sub {
-              font-size: 13px;
-              font-weight: 700;
-              border-bottom: 2px solid #111;
-              padding-bottom: 10px;
-              margin-bottom: 18px;
-            }
+            <div class="top">
 
-            .block {
-              margin-bottom: 16px;
-            }
+              <div class="logo">
+                INSOR
+              </div>
 
-            .title {
-              font-size: 11px;
-              font-weight: 700;
-              color: #555;
-              text-transform: uppercase;
-              margin-bottom: 3px;
-            }
+              <div class="empresa">
+                INSOR INTERNACIONAL SAS
+              </div>
 
-            .value {
-              font-size: 20px;
-              font-weight: 800;
-              line-height: 1.25;
-            }
+              <div class="fecha">
+                <div class="fecha-title">FECHA</div>
+                <div class="fecha-value">${fecha}</div>
+              </div>
 
-            .small {
-              font-size: 15px;
-              font-weight: 700;
-            }
-
-            .footer {
-              margin-top: 20px;
-              border-top: 1px solid #111;
-              padding-top: 10px;
-              font-size: 11px;
-              color: #444;
-            }
-
-            @media print {
-              body {
-                print-color-adjust: exact;
-              }
-            }
-          </style>
-        </head>
-
-        <body>
-          <div class="label">
-            <div class="brand">INSOR</div>
-            <div class="sub">ENVÍO / ENTREGA</div>
-
-            <div class="block">
-              <div class="title">Cliente</div>
-              <div class="value">${pedido.cliente || "-"}</div>
             </div>
 
-            <div class="block">
-              <div class="title">Dirección</div>
-              <div class="value">${pedido.direccion || "-"}</div>
+            <div class="middle">
+
+              <div class="box">
+
+                <div class="box-title">
+                  REMITENTE
+                </div>
+
+                <div class="line">
+                  <div class="value">
+                    INSOR INTERNACIONAL SAS
+                  </div>
+                </div>
+
+                <div class="line">
+                  <div class="value small">
+                    AV. GENERAL FLORES 3289, MVD
+                  </div>
+                </div>
+
+                <div class="line">
+                  <div class="value small">
+                    2203 7185
+                  </div>
+                </div>
+
+                <div class="line">
+                  <div class="value small">
+                    RUT 219 728 700 011
+                  </div>
+                </div>
+
+              </div>
+
+              <div class="box">
+
+                <div class="box-title">
+                  DESTINATARIO
+                </div>
+
+                <div class="line">
+                  <div class="label">Cliente</div>
+                  <div class="value">
+                    ${pedido.cliente || "-"}
+                  </div>
+                </div>
+
+                <div class="line">
+                  <div class="label">Dirección</div>
+                  <div class="value small">
+                    ${pedido.direccion || "-"}
+                  </div>
+                </div>
+
+                <div class="line">
+                  <div class="label">Teléfono</div>
+                  <div class="value small">
+                    ${pedido.telefono_cliente || "-"}
+                  </div>
+                </div>
+
+                <div class="line">
+                  <div class="label">Departamento</div>
+                  <div class="value small">
+                    ${pedido.departamento || "-"}
+                  </div>
+                </div>
+
+              </div>
+
             </div>
 
-            <div class="block">
-              <div class="title">Departamento</div>
-              <div class="value">${pedido.departamento || "-"}</div>
+            <div class="bottom-grid">
+
+              <div class="small-box">
+                <div class="label">Agencia</div>
+                <div class="value small">
+                  __________________
+                </div>
+              </div>
+
+              <div class="small-box">
+                <div class="label">Cantidad de bultos</div>
+                <div class="value small">
+                  ________
+                </div>
+              </div>
+
             </div>
 
-            <div class="block">
-              <div class="title">Teléfono</div>
-              <div class="value">${pedido.telefono_cliente || "-"}</div>
+            <div class="warning">
+
+              <div>
+
+                <div class="warning-title">
+                  MANIPULAR MERCADERÍA CON PRECAUCIÓN
+                </div>
+
+                <div class="warning-sub">
+                  CUALQUIER PROBLEMA RELACIONADO CON LA MERCADERÍA<br/>
+                  COMUNICARSE DIRECTAMENTE CON LOGÍSTICA: 097 995 530
+                </div>
+
+              </div>
+
+              <div class="fragil">
+                <div class="fragil-top">
+                  CUIDADO
+                </div>
+
+                <div class="fragil-icon">
+                  🍷
+                </div>
+
+                <div class="fragil-bottom">
+                  FRÁGIL
+                </div>
+              </div>
+
             </div>
 
-            <div class="block">
-              <div class="title">Factura</div>
-              <div class="value">${pedido.numero_factura || "-"}</div>
-            </div>
+            ${
+              pedido.observaciones
+                ? `
+                  <div class="obs">
+                    <div class="obs-title">
+                      OBSERVACIONES
+                    </div>
 
-            <div class="block">
-              <div class="title">Fecha entrega</div>
-              <div class="small">${fechaUY(pedido.fecha_entrega_programada || pedido.fecha_entregado)}</div>
-            </div>
+                    <div class="obs-text">
+                      ${pedido.observaciones}
+                    </div>
+                  </div>
+                `
+                : ""
+            }
 
-            <div class="footer">
-              Generado desde Depósito Insor
-            </div>
           </div>
 
-          <script>
-            window.onload = function() {
-              window.print();
-            };
-          </script>
-        </body>
-      </html>
-    `);
+        </div>
 
-    ventana.document.close();
-  }
+        <script>
+          window.onload = function() {
+            setTimeout(() => {
+              window.print();
+            }, 300);
+          };
+        </script>
+
+      </body>
+    </html>
+  `);
+
+  ventana.document.close();
+} 
 
   const pedidoSeleccionado = useMemo(() => {
     return entregas.find((e) => e.id === seleccionadoId) || null;

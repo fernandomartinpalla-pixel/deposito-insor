@@ -76,7 +76,13 @@ export default function Home() {
 
   const [busqueda, setBusqueda] = useState("");
   const [mensaje, setMensaje] = useState("");
+  const usuariosSoloLectura = [
+  "insoroficina@gmail.com",
+];
 
+const soloLectura = user?.email
+  ? usuariosSoloLectura.includes(user.email)
+  : false;
   const [editando, setEditando] =
     useState<Entrega | null>(null);
 
@@ -308,7 +314,7 @@ async function guardarClienteAutomatico(
           telefono_cliente: telefono.trim(),
           direccion: direccion.trim(),
           departamento: departamento.trim(),
-          estado: "a_entregar",
+          estado: "pendiente",
         },
       ]);
 
@@ -1172,6 +1178,7 @@ const pedidoSeleccionado = pedidosSeleccionados[0] || null;
             </div>
           )}
 
+          {!soloLectura && (
           <section className="bg-slate-900 rounded-3xl border border-slate-800 p-6 mb-10">
 
             <h3 className="text-2xl font-bold mb-6">
@@ -1258,8 +1265,8 @@ const pedidoSeleccionado = pedidosSeleccionados[0] || null;
             </button>
 
           </section>
-
-          {pedidoSeleccionado && (
+)}
+          {pedidoSeleccionado && !soloLectura && (
 
             <section className="bg-slate-900 border border-cyan-500 rounded-3xl p-5 mb-8">
 
@@ -1305,7 +1312,7 @@ const pedidoSeleccionado = pedidosSeleccionados[0] || null;
                   />
 
                   <Boton
-                    texto="↩️ Restaurar"
+                    texto="🚚 Reparto"
                     color="bg-cyan-500"
                     onClick={
                       accionRestaurar
@@ -1343,7 +1350,7 @@ const pedidoSeleccionado = pedidosSeleccionados[0] || null;
             </section>
           )}
                     <GridSection
-            titulo="🚚 Pedidos a entregar"
+            titulo="🚚 Pedidos en reparto"
             color="border-cyan-500"
             entregas={aEntregar}
             fechaUY={fechaUY}
@@ -1353,7 +1360,7 @@ const pedidoSeleccionado = pedidosSeleccionados[0] || null;
           />
 
           <GridSection
-            titulo="⏳ Pedidos pendientes"
+            titulo="📦 Pedidos prontos en depósito"
             color="border-yellow-500"
             entregas={pendientes}
             fechaUY={fechaUY}

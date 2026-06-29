@@ -1,26 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
-type Estado =
-  | "a_entregar"
-  | "pendiente"
-  | "entregado"
-  | "papelera";
-
-type Prioridad =
-  | "normal"
-  | "urgente"
-  | "critico";
-
-type FiltroHistorial =
-  | "ultimos5"
-  | "esteMes"
-  | "porMes"
-  | "todas";
+type Estado = "a_entregar" | "pendiente" | "entregado" | "papelera";
+type Prioridad = "normal" | "urgente" | "critico";
+type FiltroHistorial = "ultimos5" | "esteMes" | "porMes" | "todas";
 
 type Cliente = {
   id: number;
@@ -48,59 +34,41 @@ type Entrega = {
   created_at?: string;
 };
 
+const USUARIOS_SOLO_LECTURA = ["insoroficina@gmail.com"];
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [entregas, setEntregas] = useState<Entrega[]>([]);
+  const [enReparto, setEnReparto] = useState<Entrega[]>([]);
+  const [prontosDeposito, setProntosDeposito] = useState<Entrega[]>([]);
+  const [historial, setHistorial] = useState<Entrega[]>([]);
+  const [papelera, setPapelera] = useState<Entrega[]>([]);
+
+  const [cargandoDatos, setCargandoDatos] = useState(false);
+  const [papeleraCargada, setPapeleraCargada] = useState(false);
 
   const [cliente, setCliente] = useState("");
-  const [fechaPedido, setFechaPedido] = useState(
-    new Date().toISOString().slice(0, 10)
-  );
-
-  const [fechaEntrega, setFechaEntrega] = useState(
-    new Date().toISOString().slice(0, 10)
-  );
-
+  const [fechaPedido, setFechaPedido] = useState(new Date().toISOString().slice(0, 10));
+  const [fechaEntrega, setFechaEntrega] = useState(new Date().toISOString().slice(0, 10));
   const [factura, setFactura] = useState("");
   const [monto, setMonto] = useState("");
   const [observaciones, setObservaciones] = useState("");
-  const [prioridad, setPrioridad] =
-    useState<Prioridad>("normal");
-
+  const [prioridad, setPrioridad] = useState<Prioridad>("normal");
   const [telefono, setTelefono] = useState("");
   const [direccion, setDireccion] = useState("");
   const [departamento, setDepartamento] = useState("");
 
   const [busqueda, setBusqueda] = useState("");
   const [mensaje, setMensaje] = useState("");
-  const usuariosSoloLectura = [
-  "insoroficina@gmail.com",
-];
+  const [editando, setEditando] = useState<Entrega | null>(null);
+  const [seleccionados, setSeleccionados] = useState<number[]>([]);
 
-const soloLectura = user?.email
-  ? usuariosSoloLectura.includes(user.email)
-  : false;
-  const [editando, setEditando] =
-    useState<Entrega | null>(null);
+  const [filtroHistorial, setFiltroHistorial] = useState<FiltroHistorial>("ultimos5");
+  const [mesSeleccionado, setMesSeleccionado] = useState(new Date().toISOString().slice(0, 7));
 
- const [seleccionados, setSeleccionados] =
-  useState<number[]>([]);
-  function toggleSeleccion(id: number) {
-  setSeleccionados((prev) =>
-    prev.includes(id)
-      ? prev.filter((x) => x !== id)
-      : [...prev, id]
-  );
-}
-
-  const [filtroHistorial, setFiltroHistorial] =
-    useState<FiltroHistorial>("ultimos5");
-
-  const [mesSeleccionado, setMesSeleccionado] =
-    useState("");
+  const soloLectura = user?.email ? USUARIOS_SOLO_LECTURA.includes(user.email) : false;
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -108,12 +76,9 @@ const soloLectura = user?.email
       setLoading(false);
     });
 
-    const { data: listener } =
-      supabase.auth.onAuthStateChange(
-        (_event, session) => {
-          setUser(session?.user ?? null);
-        }
-      );
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
 
     return () => {
       listener.subscription.unsubscribe();
@@ -123,60 +88,42 @@ const soloLectura = user?.email
   useEffect(() => {
     if (!user) return;
 
-    cargarEntregas();
-    cargarClientes();
+    cargarDatosIniciales();
 
     const channel = supabase
-      .channel("deposito-sync")
-
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "entregas",
-        },
-        () => {
-          cargarEntregas();
-        }
-      )
-
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "clientes",
-        },
-        () => {
-          cargarClientes();
-        }
-      )
-
+      .channel("deposito-sync-v2")
+      .on("postgres_changes", { event: "*", schema: "public", table: "entregas" }, () => {
+        cargarPedidosActivos();
+        cargarHistorial();
+        if (papeleraCargada) cargarPapelera();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "clientes" }, () => {
+        cargarClientes();
+      })
       .subscribe();
 
-    const intervalo = setInterval(() => {
-      cargarEntregas();
-      cargarClientes();
-    }, 5000);
+    const respaldo = setInterval(() => {
+      cargarPedidosActivos();
+    }, 30000);
 
     return () => {
       supabase.removeChannel(channel);
-      clearInterval(intervalo);
+      clearInterval(respaldo);
     };
-  }, [user]);
+  }, [user, papeleraCargada]);
 
-  async function login(
-    email: string,
-    password: string
-  ) {
+  useEffect(() => {
+    if (!user) return;
+    cargarHistorial();
+  }, [filtroHistorial, mesSeleccionado, user]);
+
+  async function login(email: string, password: string) {
     setMensaje("");
 
-    const { error } =
-      await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
     if (error) {
       setMensaje(error.message);
@@ -186,26 +133,99 @@ const soloLectura = user?.email
   async function logout() {
     await supabase.auth.signOut();
     setUser(null);
+    setEnReparto([]);
+    setProntosDeposito([]);
+    setHistorial([]);
+    setPapelera([]);
+    setSeleccionados([]);
   }
 
-  async function cargarEntregas() {
-    const { data, error } = await supabase
-      .from("entregas")
-      .select("*")
-      .order("id", { ascending: false });
+  async function cargarDatosIniciales() {
+    setCargandoDatos(true);
+    await Promise.all([cargarPedidosActivos(), cargarHistorial(), cargarClientes()]);
+    setCargandoDatos(false);
+  }
 
-    if (error) {
-      setMensaje(error.message);
+  async function cargarPedidosActivos() {
+    const [repartoRes, prontosRes] = await Promise.all([
+      supabase
+        .from("entregas")
+        .select("*")
+        .eq("estado", "a_entregar")
+        .order("fecha_entrega_programada", { ascending: true }),
+
+      supabase
+        .from("entregas")
+        .select("*")
+        .eq("estado", "pendiente")
+        .order("fecha_entrega_programada", { ascending: true }),
+    ]);
+
+    if (repartoRes.error) {
+      setMensaje("Error cargando pedidos en reparto: " + repartoRes.error.message);
       return;
     }
 
-    const normalizadas = (data || []).map((e) => ({
-      ...e,
-      estado: e.estado || "a_entregar",
-      prioridad: e.prioridad || "normal",
-    })) as Entrega[];
+    if (prontosRes.error) {
+      setMensaje("Error cargando pedidos prontos: " + prontosRes.error.message);
+      return;
+    }
 
-    setEntregas(normalizadas);
+    setEnReparto(normalizarEntregas(repartoRes.data || []));
+    setProntosDeposito(normalizarEntregas(prontosRes.data || []));
+  }
+
+  async function cargarHistorial() {
+    let query = supabase
+      .from("entregas")
+      .select("*")
+      .eq("estado", "entregado")
+      .order("fecha_entregado", { ascending: false });
+
+    if (filtroHistorial === "ultimos5") {
+      const fechaLimite = new Date();
+      fechaLimite.setDate(fechaLimite.getDate() - 4);
+      query = query.gte("fecha_entregado", fechaLimite.toISOString().slice(0, 10));
+    }
+
+    if (filtroHistorial === "esteMes") {
+      const mesActual = new Date().toISOString().slice(0, 7);
+      query = query.gte("fecha_entregado", `${mesActual}-01`).lt("fecha_entregado", proximoMes(mesActual));
+    }
+
+    if (filtroHistorial === "porMes") {
+      query = query.gte("fecha_entregado", `${mesSeleccionado}-01`).lt("fecha_entregado", proximoMes(mesSeleccionado));
+    }
+
+    if (filtroHistorial === "todas") {
+      query = query.limit(500);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      setMensaje("Error cargando historial: " + error.message);
+      return;
+    }
+
+    setHistorial(normalizarEntregas(data || []));
+  }
+
+  async function cargarPapelera() {
+    const { data, error } = await supabase
+      .from("entregas")
+      .select("*")
+      .eq("estado", "papelera")
+      .order("id", { ascending: false })
+      .limit(500);
+
+    if (error) {
+      setMensaje("Error cargando papelera: " + error.message);
+      return;
+    }
+
+    setPapelera(normalizarEntregas(data || []));
+    setPapeleraCargada(true);
   }
 
   async function cargarClientes() {
@@ -218,105 +238,120 @@ const soloLectura = user?.email
       setClientes(data as Cliente[]);
     }
   }
-async function autocompletarCliente(nombre: string) {
-  setCliente(nombre);
 
-  const texto = nombre.trim();
-
-  if (texto.length < 2) {
-    setTelefono("");
-    setDireccion("");
-    setDepartamento("");
-    return;
+  function normalizarEntregas(data: any[]): Entrega[] {
+    return data.map((e) => ({
+      ...e,
+      estado: e.estado || "pendiente",
+      prioridad: e.prioridad || "normal",
+    })) as Entrega[];
   }
 
-  const { data, error } = await supabase
-    .from("clientes")
-    .select("*")
-    .ilike("nombre", `%${texto}%`)
-    .limit(1);
-
-  if (error) {
-    setMensaje("Error buscando cliente: " + error.message);
-    return;
+  function proximoMes(mes: string) {
+    const [anio, mesNum] = mes.split("-").map(Number);
+    const fecha = new Date(anio, mesNum, 1);
+    return fecha.toISOString().slice(0, 10);
   }
 
-  const encontrado = data?.[0];
+  async function autocompletarCliente(nombre: string) {
+    setCliente(nombre);
 
-  if (encontrado) {
-    setTelefono(encontrado.telefono || "");
-    setDireccion(encontrado.direccion || "");
-    setDepartamento(encontrado.departamento || "");
-  }
-}
+    const texto = nombre.trim();
 
-async function guardarClienteAutomatico(
-  nombre: string,
-  tel: string,
-  dir: string,
-  dep: string
-) {
-  if (!nombre.trim()) return;
-
-  const { error } = await supabase.from("clientes").upsert(
-    [
-      {
-        nombre: nombre.trim(),
-        telefono: tel.trim() || null,
-        direccion: dir.trim() || null,
-        departamento: dep.trim() || null,
-      },
-    ],
-    {
-      onConflict: "nombre",
+    if (texto.length < 2) {
+      setTelefono("");
+      setDireccion("");
+      setDepartamento("");
+      return;
     }
-  );
 
-  if (error) {
-    setMensaje("Error al guardar cliente: " + error.message);
-    return;
+    const local = clientes.find((c) =>
+      c.nombre.trim().toLowerCase().includes(texto.toLowerCase())
+    );
+
+    if (local) {
+      setTelefono(local.telefono || "");
+      setDireccion(local.direccion || "");
+      setDepartamento(local.departamento || "");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("clientes")
+      .select("*")
+      .ilike("nombre", `%${texto}%`)
+      .limit(1);
+
+    if (error) {
+      setMensaje("Error buscando cliente: " + error.message);
+      return;
+    }
+
+    const encontrado = data?.[0];
+
+    if (encontrado) {
+      setTelefono(encontrado.telefono || "");
+      setDireccion(encontrado.direccion || "");
+      setDepartamento(encontrado.departamento || "");
+    }
   }
 
-  await cargarClientes();
-}
+  async function guardarClienteAutomatico(
+    nombre: string,
+    tel: string,
+    dir: string,
+    dep: string
+  ) {
+    if (!nombre.trim()) return;
+
+    const { error } = await supabase.from("clientes").upsert(
+      [
+        {
+          nombre: nombre.trim(),
+          telefono: tel.trim() || null,
+          direccion: dir.trim() || null,
+          departamento: dep.trim() || null,
+        },
+      ],
+      {
+        onConflict: "nombre",
+      }
+    );
+
+    if (error) {
+      setMensaje("Error al guardar cliente: " + error.message);
+      return;
+    }
+
+    await cargarClientes();
+  }
 
   async function guardarEntrega() {
     setMensaje("");
 
-    if (
-      !cliente.trim() ||
-      !factura.trim() ||
-      !monto
-    ) {
+    if (!cliente.trim() || !factura.trim() || !monto) {
       setMensaje("Faltan datos obligatorios.");
       return;
     }
 
-    await guardarClienteAutomatico(
-      cliente,
-      telefono,
-      direccion,
-      departamento
-    );
+    await guardarClienteAutomatico(cliente, telefono, direccion, departamento);
 
-    const { error } = await supabase
-      .from("entregas")
-      .insert([
-        {
-          cliente: cliente.trim(),
-          fecha_pedido: fechaPedido,
-          fecha_entrega_programada: fechaEntrega,
-          fecha_entregado: fechaEntrega,
-          numero_factura: factura.trim(),
-          monto: Number(monto),
-          observaciones: observaciones.trim(),
-          prioridad,
-          telefono_cliente: telefono.trim(),
-          direccion: direccion.trim(),
-          departamento: departamento.trim(),
-          estado: "pendiente",
-        },
-      ]);
+    const { error } = await supabase.from("entregas").insert([
+      {
+        cliente: cliente.trim(),
+        fecha_pedido: fechaPedido,
+        fecha_entrega_programada: fechaEntrega,
+        fecha_entregado: fechaEntrega,
+        numero_factura: factura.trim(),
+        monto: Number(monto),
+        observaciones: observaciones.trim(),
+        prioridad,
+        telefono_cliente: telefono.trim(),
+        direccion: direccion.trim(),
+        departamento: departamento.trim(),
+        estado: "pendiente",
+      },
+    ]);
 
     if (error) {
       setMensaje(error.message);
@@ -324,23 +359,14 @@ async function guardarClienteAutomatico(
     }
 
     limpiarFormulario();
-
-    await cargarEntregas();
-
+    await cargarPedidosActivos();
     setMensaje("Pedido agregado correctamente.");
   }
 
   function limpiarFormulario() {
     setCliente("");
-
-    setFechaPedido(
-      new Date().toISOString().slice(0, 10)
-    );
-
-    setFechaEntrega(
-      new Date().toISOString().slice(0, 10)
-    );
-
+    setFechaPedido(new Date().toISOString().slice(0, 10));
+    setFechaEntrega(new Date().toISOString().slice(0, 10));
     setFactura("");
     setMonto("");
     setObservaciones("");
@@ -350,30 +376,46 @@ async function guardarClienteAutomatico(
     setDepartamento("");
   }
 
-  async function cambiarEstado(
-    id: number,
-    estado: Estado
-  ) {
-    const updateData: Partial<Entrega> = {
-      estado,
-    };
+  function toggleSeleccion(id: number) {
+    setSeleccionados((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
+  async function cambiarEstadoSeleccionados(estado: Estado) {
+    setMensaje("");
+
+    if (seleccionados.length === 0) {
+      setMensaje("Seleccioná al menos un pedido.");
+      return;
+    }
+
+    const updateData: Partial<Entrega> = { estado };
 
     if (estado === "entregado") {
-      updateData.fecha_entregado_real =
-        new Date().toISOString();
+      updateData.fecha_entregado_real = new Date().toISOString();
     }
 
     const { error } = await supabase
       .from("entregas")
       .update(updateData)
-      .eq("id", id);
+      .in("id", seleccionados);
 
     if (error) {
       setMensaje(error.message);
       return;
     }
 
-    await cargarEntregas();
+    const cantidad = seleccionados.length;
+    setSeleccionados([]);
+
+    await Promise.all([
+      cargarPedidosActivos(),
+      cargarHistorial(),
+      papeleraCargada ? cargarPapelera() : Promise.resolve(),
+    ]);
+
+    setMensaje(`Se actualizaron ${cantidad} pedidos.`);
   }
 
   async function actualizarPedido() {
@@ -391,33 +433,16 @@ async function guardarClienteAutomatico(
       .update({
         cliente: editando.cliente,
         fecha_pedido: editando.fecha_pedido,
-        fecha_entrega_programada:
-          editando.fecha_entrega_programada,
-
-        fecha_entregado:
-          editando.fecha_entrega_programada ||
-          editando.fecha_entregado,
-
-        numero_factura:
-          editando.numero_factura,
-
+        fecha_entrega_programada: editando.fecha_entrega_programada,
+        fecha_entregado: editando.fecha_entrega_programada || editando.fecha_entregado,
+        numero_factura: editando.numero_factura,
         monto: Number(editando.monto),
-
-        observaciones:
-          editando.observaciones,
-
-        prioridad:
-          editando.prioridad || "normal",
-
-        telefono_cliente:
-          editando.telefono_cliente,
-
+        observaciones: editando.observaciones,
+        prioridad: editando.prioridad || "normal",
+        telefono_cliente: editando.telefono_cliente,
         direccion: editando.direccion,
-
-        departamento:
-          editando.departamento,
+        departamento: editando.departamento,
       })
-
       .eq("id", editando.id);
 
     if (error) {
@@ -426,634 +451,391 @@ async function guardarClienteAutomatico(
     }
 
     setEditando(null);
-
-    await cargarEntregas();
-
-    setMensaje(
-      "Pedido actualizado correctamente."
-    );
+    await Promise.all([cargarPedidosActivos(), cargarHistorial()]);
+    setMensaje("Pedido actualizado correctamente.");
   }
 
-  function fechaUY(
-    fecha?: string | null
-  ) {
+  function editarSeleccionado() {
+    if (seleccionados.length !== 1) {
+      setMensaje("Para editar, seleccioná un solo pedido.");
+      return;
+    }
+
+    const pedido = todosLosPedidos.find((e) => e.id === seleccionados[0]);
+
+    if (pedido) {
+      setEditando(pedido);
+    }
+  }
+
+  function imprimirSeleccionados() {
+    if (seleccionados.length === 0) {
+      setMensaje("Seleccioná al menos un pedido para imprimir etiqueta.");
+      return;
+    }
+
+    const pedidos = todosLosPedidos.filter((e) => seleccionados.includes(e.id));
+
+    imprimirEtiquetas(pedidos);
+  }
+
+  function fechaUY(fecha?: string | null) {
     if (!fecha) return "-";
 
     const limpia = fecha.slice(0, 10);
-
     const [y, m, d] = limpia.split("-");
 
     return `${d}/${m}/${y}`;
   }
 
   function usd(valor: number) {
-    return `USD ${Number(valor || 0).toFixed(
-      2
-    )}`;
+    return `USD ${Number(valor || 0).toFixed(2)}`;
   }
 
-  function nombreMes(mes: string) {
-    const [anio, nroMes] = mes.split("-");
-
-    const nombres = [
-      "Enero",
-      "Febrero",
-      "Marzo",
-      "Abril",
-      "Mayo",
-      "Junio",
-      "Julio",
-      "Agosto",
-      "Setiembre",
-      "Octubre",
-      "Noviembre",
-      "Diciembre",
-    ];
-
-    return `${
-      nombres[Number(nroMes) - 1]
-    } ${anio}`;
-  }
-
-
-const pedidosSeleccionados = useMemo(() => {
-  return entregas.filter((e) => seleccionados.includes(e.id));
-}, [entregas, seleccionados]);
-
-const pedidoSeleccionado = pedidosSeleccionados[0] || null;
-
-  function accionEditar() {
-    if (!pedidoSeleccionado) return;
-    setEditando(pedidoSeleccionado);
-  }
-
-  async function accionRestaurar() {
-    if (!pedidoSeleccionado) return;
-
-    await cambiarEstado(
-      pedidoSeleccionado.id,
-      "a_entregar"
-    );
-  }
-
-  async function accionPapelera() {
-    if (!pedidoSeleccionado) return;
-
-    await cambiarEstado(
-      pedidoSeleccionado.id,
-      "papelera"
-    );
-  }
-
-  async function accionEntregado() {
-    if (!pedidoSeleccionado) return;
-
-    await cambiarEstado(
-      pedidoSeleccionado.id,
-      "entregado"
-    );
-  }
-
-  async function accionPendiente() {
-    if (!pedidoSeleccionado) return;
-
-    await cambiarEstado(
-      pedidoSeleccionado.id,
-      "pendiente"
-    );
-  }
-
-  function imprimirEtiqueta(
-    pedido: Entrega
-  ) {
-    const ventana = window.open(
-      "",
-      "_blank"
-    );
+  function imprimirEtiquetas(pedidos: Entrega[]) {
+    const ventana = window.open("", "_blank");
 
     if (!ventana) {
-      setMensaje(
-        "El navegador bloqueó la impresión."
-      );
-
+      setMensaje("El navegador bloqueó la impresión.");
       return;
     }
 
-    const fecha =
-      new Date().toLocaleDateString(
-        "es-UY"
-      );
+    const fecha = new Date().toLocaleDateString("es-UY");
 
-    ventana.document.write(`
-      <!DOCTYPE html>
-      <html>
-
-      <head>
-
-        <title>
-          Etiqueta ${pedido.numero_factura}
-        </title>
-
-        <style>
-
-          @page {
-            size: A4;
-            margin: 8mm;
-          }
-
-          body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            color: #111;
-            background: white;
-          }
-
-          .page {
-            width: 100%;
-            padding: 10px;
-            box-sizing: border-box;
-          }
-
-          .label {
-            border: 2px solid #111;
-            padding: 14px;
-          }
-
-          .top {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 12px;
-          }
-
-          .logo {
-            width: 130px;
-            border: 2px solid #111;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 30px;
-            font-weight: 900;
-          }
-
-          .empresa {
-            flex: 1;
-            border: 2px solid #111;
-            padding: 10px;
-            font-size: 24px;
-            font-weight: 900;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-
-          .fecha {
-            width: 140px;
-            border: 2px solid #111;
-            padding: 10px;
-          }
-
-          .fecha-title {
-            font-size: 13px;
-            font-weight: 900;
-            margin-bottom: 6px;
-          }
-
-          .fecha-value {
-            font-size: 22px;
-            font-weight: 700;
-          }
-
-          .middle {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 12px;
-          }
-
-          .box {
-            flex: 1;
-            border: 2px solid #111;
-            padding: 12px;
-            min-height: 220px;
-            box-sizing: border-box;
-          }
-
-          .box-title {
-            text-align: center;
-            font-size: 16px;
-            font-weight: 900;
-            text-decoration: underline;
-            margin-bottom: 14px;
-          }
-
-          .line {
-            margin-bottom: 14px;
-          }
-
-          .label-title {
-            font-size: 11px;
-            font-weight: 900;
-            text-transform: uppercase;
-            margin-bottom: 3px;
-          }
-
-          .value {
-            font-size: 18px;
-            font-weight: 700;
-            line-height: 1.3;
-          }
-
-          .small {
-            font-size: 15px;
-          }
-
-          .bottom {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 12px;
-          }
-
-          .small-box {
-            flex: 1;
-            border: 2px solid #111;
-            padding: 10px;
-            min-height: 65px;
-          }
-
-          .warning {
-            border: 2px solid #111;
-            padding: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 15px;
-          }
-
-          .warning-title {
-            font-size: 20px;
-            font-weight: 900;
-            margin-bottom: 10px;
-          }
-
-          .warning-sub {
-            font-size: 13px;
-            font-weight: 700;
-            line-height: 1.5;
-          }
-
-          .fragil {
-            width: 120px;
-            height: 120px;
-            background: #d60000;
-            color: white;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            border: 2px solid #111;
-          }
-
-          .fragil-top {
-            font-size: 22px;
-          }
-
-          .fragil-icon {
-            font-size: 42px;
-          }
-
-          .fragil-bottom {
-            font-size: 22px;
-          }
-
-          .obs {
-            margin-top: 12px;
-            border: 2px dashed #111;
-            padding: 10px;
-          }
-
-          .obs-title {
-            font-size: 13px;
-            font-weight: 900;
-            margin-bottom: 5px;
-          }
-
-          .obs-text {
-            font-size: 13px;
-            line-height: 1.5;
-          }
-
-        </style>
-
-      </head>
-
-      <body>
-
-        <div class="page">
-
+    const etiquetasHtml = pedidos
+      .map(
+        (pedido) => `
           <div class="label">
-
             <div class="top">
-
-              <div class="logo">
-                INSOR
-              </div>
-
-              <div class="empresa">
-                INSOR INTERNACIONAL SAS
-              </div>
-
+              <div class="logo">INSOR</div>
+              <div class="empresa">INSOR INTERNACIONAL SAS</div>
               <div class="fecha">
-                <div class="fecha-title">
-                  FECHA
-                </div>
-
-                <div class="fecha-value">
-                  ${fecha}
-                </div>
+                <div class="fecha-title">FECHA</div>
+                <div class="fecha-value">${fecha}</div>
               </div>
-
             </div>
 
             <div class="middle">
-
               <div class="box">
-
-                <div class="box-title">
-                  REMITENTE
-                </div>
-
-                <div class="line">
-                  <div class="value">
-                    INSOR INTERNACIONAL SAS
-                  </div>
-                </div>
-
-                <div class="line">
-                  <div class="value small">
-                    AV. GENERAL FLORES 3289, MVD
-                  </div>
-                </div>
-
-                <div class="line">
-                  <div class="value small">
-                    2203 7185
-                  </div>
-                </div>
-
-                <div class="line">
-                  <div class="value small">
-                    RUT 219 728 700 011
-                  </div>
-                </div>
-
+                <div class="box-title">REMITENTE</div>
+                <div class="line"><div class="value">INSOR INTERNACIONAL SAS</div></div>
+                <div class="line"><div class="value small">AV. GENERAL FLORES 3289, MVD</div></div>
+                <div class="line"><div class="value small">2203 7185</div></div>
+                <div class="line"><div class="value small">RUT 219 728 700 011</div></div>
               </div>
 
               <div class="box">
-
-                <div class="box-title">
-                  DESTINATARIO
-                </div>
-
+                <div class="box-title">DESTINATARIO</div>
                 <div class="line">
-                  <div class="label-title">
-                    Cliente
-                  </div>
-
-                  <div class="value">
-                    ${pedido.cliente || "-"}
-                  </div>
+                  <div class="label-title">Cliente</div>
+                  <div class="value">${pedido.cliente || "-"}</div>
                 </div>
-
                 <div class="line">
-                  <div class="label-title">
-                    Dirección
-                  </div>
-
-                  <div class="value small">
-                    ${pedido.direccion || "-"}
-                  </div>
+                  <div class="label-title">Dirección</div>
+                  <div class="value small">${pedido.direccion || "-"}</div>
                 </div>
-
                 <div class="line">
-                  <div class="label-title">
-                    Teléfono
-                  </div>
-
-                  <div class="value small">
-                    ${
-                      pedido.telefono_cliente ||
-                      "-"
-                    }
-                  </div>
+                  <div class="label-title">Teléfono</div>
+                  <div class="value small">${pedido.telefono_cliente || "-"}</div>
                 </div>
-
                 <div class="line">
-                  <div class="label-title">
-                    Departamento
-                  </div>
-
-                  <div class="value small">
-                    ${
-                      pedido.departamento || "-"
-                    }
-                  </div>
+                  <div class="label-title">Departamento</div>
+                  <div class="value small">${pedido.departamento || "-"}</div>
                 </div>
-
               </div>
-
             </div>
 
             <div class="bottom">
-
               <div class="small-box">
-                <div class="label-title">
-                  Agencia
-                </div>
-
-                <div class="value small">
-                  __________________
-                </div>
+                <div class="label-title">Agencia</div>
+                <div class="value small">__________________</div>
               </div>
-
               <div class="small-box">
-                <div class="label-title">
-                  Cantidad de bultos
-                </div>
-
-                <div class="value small">
-                  ________
-                </div>
+                <div class="label-title">Cantidad de bultos</div>
+                <div class="value small">________</div>
               </div>
-
             </div>
 
             <div class="warning">
-
               <div>
-
-                <div class="warning-title">
-                  MANIPULAR MERCADERÍA
-                  CON PRECAUCIÓN
-                </div>
-
+                <div class="warning-title">MANIPULAR MERCADERÍA CON PRECAUCIÓN</div>
                 <div class="warning-sub">
-                  CUALQUIER PROBLEMA
-                  RELACIONADO CON LA
-                  MERCADERÍA<br/>
-
-                  COMUNICARSE CON
-                  LOGÍSTICA:
-                  097 995 530
+                  CUALQUIER PROBLEMA RELACIONADO CON LA MERCADERÍA<br/>
+                  COMUNICARSE CON LOGÍSTICA: 097 995 530
                 </div>
-
               </div>
 
               <div class="fragil">
-
-                <div class="fragil-top">
-                  CUIDADO
-                </div>
-
-                <div class="fragil-icon">
-                  🍷
-                </div>
-
-                <div class="fragil-bottom">
-                  FRÁGIL
-                </div>
-
+                <div class="fragil-top">CUIDADO</div>
+                <div class="fragil-icon">🍷</div>
+                <div class="fragil-bottom">FRÁGIL</div>
               </div>
-
             </div>
 
             ${
               pedido.observaciones
                 ? `
-                <div class="obs">
-
-                  <div class="obs-title">
-                    OBSERVACIONES
+                  <div class="obs">
+                    <div class="obs-title">OBSERVACIONES</div>
+                    <div class="obs-text">${pedido.observaciones}</div>
                   </div>
-
-                  <div class="obs-text">
-                    ${pedido.observaciones}
-                  </div>
-
-                </div>
-              `
+                `
                 : ""
             }
-
           </div>
+        `
+      )
+      .join("");
 
-        </div>
+    ventana.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Etiquetas Depósito Insor</title>
+          <style>
+            @page {
+              size: A4;
+              margin: 8mm;
+            }
 
-        <script>
-          window.onload = function() {
-            setTimeout(() => {
-              window.print();
-            }, 300);
-          };
-        </script>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 0;
+              color: #111;
+              background: white;
+            }
 
-      </body>
+            .label {
+              border: 2px solid #111;
+              padding: 14px;
+              margin-bottom: 12px;
+              page-break-inside: avoid;
+            }
 
+            .top {
+              display: flex;
+              gap: 10px;
+              margin-bottom: 12px;
+            }
+
+            .logo {
+              width: 130px;
+              border: 2px solid #111;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 30px;
+              font-weight: 900;
+            }
+
+            .empresa {
+              flex: 1;
+              border: 2px solid #111;
+              padding: 10px;
+              font-size: 24px;
+              font-weight: 900;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+
+            .fecha {
+              width: 140px;
+              border: 2px solid #111;
+              padding: 10px;
+            }
+
+            .fecha-title {
+              font-size: 13px;
+              font-weight: 900;
+              margin-bottom: 6px;
+            }
+
+            .fecha-value {
+              font-size: 22px;
+              font-weight: 700;
+            }
+
+            .middle {
+              display: flex;
+              gap: 12px;
+              margin-bottom: 12px;
+            }
+
+            .box {
+              flex: 1;
+              border: 2px solid #111;
+              padding: 12px;
+              min-height: 190px;
+              box-sizing: border-box;
+            }
+
+            .box-title {
+              text-align: center;
+              font-size: 16px;
+              font-weight: 900;
+              text-decoration: underline;
+              margin-bottom: 14px;
+            }
+
+            .line {
+              margin-bottom: 11px;
+            }
+
+            .label-title {
+              font-size: 11px;
+              font-weight: 900;
+              text-transform: uppercase;
+              margin-bottom: 3px;
+            }
+
+            .value {
+              font-size: 18px;
+              font-weight: 700;
+              line-height: 1.25;
+            }
+
+            .small {
+              font-size: 15px;
+            }
+
+            .bottom {
+              display: flex;
+              gap: 12px;
+              margin-bottom: 12px;
+            }
+
+            .small-box {
+              flex: 1;
+              border: 2px solid #111;
+              padding: 10px;
+              min-height: 55px;
+            }
+
+            .warning {
+              border: 2px solid #111;
+              padding: 12px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              gap: 15px;
+            }
+
+            .warning-title {
+              font-size: 18px;
+              font-weight: 900;
+              margin-bottom: 8px;
+            }
+
+            .warning-sub {
+              font-size: 12px;
+              font-weight: 700;
+              line-height: 1.4;
+            }
+
+            .fragil {
+              width: 105px;
+              height: 105px;
+              background: #d60000;
+              color: white;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              font-weight: 900;
+              border: 2px solid #111;
+            }
+
+            .fragil-top {
+              font-size: 19px;
+            }
+
+            .fragil-icon {
+              font-size: 36px;
+            }
+
+            .fragil-bottom {
+              font-size: 19px;
+            }
+
+            .obs {
+              margin-top: 10px;
+              border: 2px dashed #111;
+              padding: 9px;
+            }
+
+            .obs-title {
+              font-size: 12px;
+              font-weight: 900;
+              margin-bottom: 5px;
+            }
+
+            .obs-text {
+              font-size: 12px;
+              line-height: 1.4;
+            }
+
+            @media print {
+              body {
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+              }
+            }
+          </style>
+        </head>
+
+        <body>
+          ${etiquetasHtml}
+
+          <script>
+            window.onload = function() {
+              setTimeout(() => window.print(), 300);
+            };
+          </script>
+        </body>
       </html>
     `);
 
     ventana.document.close();
   }
-    const filtradas = useMemo(() => {
-    const texto = busqueda.toLowerCase();
 
-    return entregas.filter(
-      (e) =>
-        e.cliente?.toLowerCase().includes(texto) ||
-        e.numero_factura?.toLowerCase().includes(texto) ||
-        e.telefono_cliente?.toLowerCase().includes(texto) ||
-        e.direccion?.toLowerCase().includes(texto) ||
-        e.departamento?.toLowerCase().includes(texto)
-    );
-  }, [busqueda, entregas]);
+  const todosLosPedidos = useMemo(() => {
+    return [...enReparto, ...prontosDeposito, ...historial, ...papelera];
+  }, [enReparto, prontosDeposito, historial, papelera]);
 
-  const aEntregar = filtradas.filter(
-    (e) => e.estado === "a_entregar"
-  );
+  const pedidosSeleccionados = useMemo(() => {
+    return todosLosPedidos.filter((e) => seleccionados.includes(e.id));
+  }, [todosLosPedidos, seleccionados]);
 
-  const pendientes = filtradas.filter(
-    (e) => e.estado === "pendiente"
-  );
+  const datosFiltrados = useMemo(() => {
+    const texto = busqueda.toLowerCase().trim();
 
-  const entregados = filtradas.filter(
-    (e) => e.estado === "entregado"
-  );
-
-  const papelera = filtradas.filter(
-    (e) => e.estado === "papelera"
-  );
-
-  const mesesDisponibles = useMemo(() => {
-    const meses = entregados
-      .map((e) =>
-        e.fecha_entregado.slice(0, 7)
-      )
-      .filter(Boolean);
-
-    return Array.from(new Set(meses))
-      .sort()
-      .reverse();
-  }, [entregados]);
-
-  const entregadosFiltrados = useMemo(() => {
-    const hoy = new Date();
-
-    const hoyIso = hoy
-      .toISOString()
-      .slice(0, 10);
-
-    const mesActual =
-      hoyIso.slice(0, 7);
-
-    if (filtroHistorial === "todas")
-      return entregados;
-
-    if (filtroHistorial === "esteMes") {
-      return entregados.filter((e) =>
-        e.fecha_entregado.startsWith(
-          mesActual
-        )
-      );
+    if (!texto) {
+      return {
+        enReparto,
+        prontosDeposito,
+        historial,
+        papelera,
+      };
     }
 
-    if (filtroHistorial === "porMes") {
-      if (!mesSeleccionado) return [];
-
-      return entregados.filter((e) =>
-        e.fecha_entregado.startsWith(
-          mesSeleccionado
-        )
+    const filtrar = (lista: Entrega[]) =>
+      lista.filter(
+        (e) =>
+          e.cliente?.toLowerCase().includes(texto) ||
+          e.numero_factura?.toLowerCase().includes(texto) ||
+          e.telefono_cliente?.toLowerCase().includes(texto) ||
+          e.direccion?.toLowerCase().includes(texto) ||
+          e.departamento?.toLowerCase().includes(texto)
       );
-    }
 
-    const fechaLimite = new Date();
-
-    fechaLimite.setDate(
-      fechaLimite.getDate() - 4
-    );
-
-    const limiteIso = fechaLimite
-      .toISOString()
-      .slice(0, 10);
-
-    return entregados.filter(
-      (e) =>
-        e.fecha_entregado >= limiteIso
-    );
-  }, [
-    entregados,
-    filtroHistorial,
-    mesSeleccionado,
-  ]);
+    return {
+      enReparto: filtrar(enReparto),
+      prontosDeposito: filtrar(prontosDeposito),
+      historial: filtrar(historial),
+      papelera: filtrar(papelera),
+    };
+  }, [busqueda, enReparto, prontosDeposito, historial, papelera]);
 
   if (loading) {
     return (
@@ -1064,74 +846,32 @@ const pedidoSeleccionado = pedidosSeleccionados[0] || null;
   }
 
   if (!user) {
-    return (
-      <LoginScreen
-        onLogin={login}
-        mensaje={mensaje}
-      />
-    );
+    return <LoginScreen onLogin={login} mensaje={mensaje} />;
   }
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
-
       <datalist id="clientes-list">
         {clientes.map((c) => (
-          <option
-            key={c.id}
-            value={c.nombre}
-          />
+          <option key={c.id} value={c.nombre} />
         ))}
       </datalist>
 
       <div className="flex">
-
         <aside className="w-72 min-h-screen bg-slate-900 border-r border-slate-800 p-6">
+          <h1 className="text-4xl font-bold mb-2">📦 Depósito</h1>
 
-          <h1 className="text-4xl font-bold mb-2">
-            📦 Depósito
-          </h1>
-
-          <p className="text-slate-400 mb-8">
-            Sistema de reparto
-          </p>
+          <p className="text-slate-400 mb-8">Sistema de reparto</p>
 
           <div className="space-y-4">
-
-            <Card
-              titulo="🚚 A entregar"
-              valor={aEntregar.length}
-              color="bg-cyan-500"
-            />
-
-            <Card
-              titulo="⏳ Pendientes"
-              valor={pendientes.length}
-              color="bg-yellow-500"
-            />
-
-            <Card
-              titulo="✅ Entregados"
-              valor={entregados.length}
-              color="bg-emerald-500"
-            />
-
-            <Card
-              titulo="🗑️ Papelera"
-              valor={papelera.length}
-              color="bg-red-500"
-            />
-
-            <Card
-              titulo="👥 Clientes"
-              valor={clientes.length}
-              color="bg-purple-500"
-            />
-
+            <Card titulo="🚚 En reparto" valor={enReparto.length} color="bg-cyan-500" />
+            <Card titulo="📦 Prontos en depósito" valor={prontosDeposito.length} color="bg-yellow-500" />
+            <Card titulo="✅ Entregados visibles" valor={historial.length} color="bg-emerald-500" />
+            <Card titulo="🗑️ Papelera" valor={papelera.length} color="bg-red-500" />
+            <Card titulo="👥 Clientes" valor={clientes.length} color="bg-purple-500" />
           </div>
 
           <div className="mt-10 text-sm text-slate-400">
-
             <p>{user.email}</p>
 
             <button
@@ -1140,36 +880,25 @@ const pedidoSeleccionado = pedidosSeleccionados[0] || null;
             >
               Cerrar sesión
             </button>
-
           </div>
-
         </aside>
 
         <section className="flex-1 p-8">
-
           <div className="flex flex-col lg:flex-row gap-5 justify-between mb-8">
-
             <div>
-
-              <h2 className="text-5xl font-bold">
-                Dashboard
-              </h2>
-
+              <h2 className="text-5xl font-bold">Dashboard</h2>
               <p className="text-slate-400 mt-2">
-                Gestión de pedidos y entregas
+                Gestión optimizada de pedidos y entregas
+                {cargandoDatos ? " · cargando datos..." : ""}
               </p>
-
             </div>
 
             <input
               value={busqueda}
-              onChange={(e) =>
-                setBusqueda(e.target.value)
-              }
-              placeholder="Buscar..."
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar cliente, factura, teléfono o dirección..."
               className="bg-slate-900 border border-slate-700 rounded-2xl px-5 py-4 w-full lg:w-96"
             />
-
           </div>
 
           {mensaje && (
@@ -1178,181 +907,108 @@ const pedidoSeleccionado = pedidosSeleccionados[0] || null;
             </div>
           )}
 
-          {!soloLectura && (
-          <section className="bg-slate-900 rounded-3xl border border-slate-800 p-6 mb-10">
-
-            <h3 className="text-2xl font-bold mb-6">
-              ➕ Nuevo pedido
-            </h3>
-
-            <div className="grid lg:grid-cols-3 gap-5">
-
-              <Input
-                placeholder="Cliente"
-                value={cliente}
-                onChange={
-                  autocompletarCliente
-                }
-                list="clientes-list"
-              />
-
-              <Input
-                placeholder="Número factura"
-                value={factura}
-                onChange={setFactura}
-              />
-
-              <Input
-                type="number"
-                placeholder="Monto USD"
-                value={monto}
-                onChange={setMonto}
-              />
-
-              <Input
-                type="date"
-                value={fechaPedido}
-                onChange={setFechaPedido}
-              />
-
-              <Input
-                type="date"
-                value={fechaEntrega}
-                onChange={setFechaEntrega}
-              />
-
-              <SelectPrioridad
-                value={prioridad}
-                onChange={setPrioridad}
-              />
-
-              <Input
-                placeholder="Teléfono"
-                value={telefono}
-                onChange={setTelefono}
-              />
-
-              <Input
-                placeholder="Dirección"
-                value={direccion}
-                onChange={setDireccion}
-              />
-
-              <Input
-                placeholder="Departamento"
-                value={departamento}
-                onChange={setDepartamento}
-              />
-
-            </div>
-
-            <textarea
-              placeholder="Observaciones"
-              value={observaciones}
-              onChange={(e) =>
-                setObservaciones(
-                  e.target.value
-                )
-              }
-              className="w-full mt-5 bg-slate-950 border border-slate-700 rounded-2xl p-5 h-32"
-            />
-
-            <button
-              onClick={guardarEntrega}
-              className="mt-5 bg-cyan-500 hover:bg-cyan-400 text-black font-bold px-6 py-4 rounded-2xl"
-            >
-              Guardar pedido
-            </button>
-
-          </section>
-)}
-          {pedidoSeleccionado && !soloLectura && (
-
+          {pedidosSeleccionados.length > 0 && !soloLectura && (
             <section className="bg-slate-900 border border-cyan-500 rounded-3xl p-5 mb-8">
-
               <div className="flex flex-col lg:flex-row gap-4 justify-between items-center">
-
                 <div>
-
-                  <p className="text-slate-400 text-sm">
-                    Pedido seleccionado
-                  </p>
-
-                  <h3 className="text-2xl font-bold">
-                    {
-                      pedidoSeleccionado.cliente
-                    }
-                  </h3>
-
+                  <p className="text-slate-400 text-sm">Pedidos seleccionados</p>
+                  <h3 className="text-2xl font-bold">{pedidosSeleccionados.length}</h3>
                   <p className="text-slate-400">
-                    Factura{" "}
-                    {
-                      pedidoSeleccionado.numero_factura
-                    }
+                    {pedidosSeleccionados[0]?.cliente}
+                    {pedidosSeleccionados.length > 1 ? " y otros" : ""}
                   </p>
-
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-
-                  <Boton
-                    texto="✏️ Editar"
-                    color="bg-slate-500"
-                    onClick={accionEditar}
-                  />
-
-                  <Boton
-                    texto="🏷️ Etiqueta"
-                    color="bg-purple-500"
-                    onClick={() =>
-                      imprimirEtiqueta(
-                        pedidoSeleccionado
-                      )
-                    }
-                  />
-
-                  <Boton
-                    texto="🚚 Reparto"
-                    color="bg-cyan-500"
-                    onClick={
-                      accionRestaurar
-                    }
-                  />
-
-                  <Boton
-                    texto="🗑️ Papelera"
-                    color="bg-red-500"
-                    onClick={
-                      accionPapelera
-                    }
-                  />
-
-                  <Boton
-                    texto="✅ Entregado"
-                    color="bg-emerald-500"
-                    onClick={
-                      accionEntregado
-                    }
-                  />
-
-                  <Boton
-                    texto="⏳ Pendiente"
-                    color="bg-yellow-500"
-                    onClick={
-                      accionPendiente
-                    }
-                  />
-
+                  <Boton texto="✏️ Editar" color="bg-slate-500" onClick={editarSeleccionado} />
+                  <Boton texto="🏷️ Etiquetas" color="bg-purple-500" onClick={imprimirSeleccionados} />
+                  <Boton texto="🚚 Reparto" color="bg-cyan-500" onClick={() => cambiarEstadoSeleccionados("a_entregar")} />
+                  <Boton texto="📦 Depósito" color="bg-yellow-500" onClick={() => cambiarEstadoSeleccionados("pendiente")} />
+                  <Boton texto="✅ Entregado" color="bg-emerald-500" onClick={() => cambiarEstadoSeleccionados("entregado")} />
+                  <Boton texto="🗑️ Papelera" color="bg-red-500" onClick={() => cambiarEstadoSeleccionados("papelera")} />
                 </div>
-
               </div>
-
             </section>
           )}
-                    <GridSection
+
+          {!soloLectura && (
+            <section className="bg-slate-900 rounded-3xl border border-slate-800 p-6 mb-10">
+              <h3 className="text-2xl font-bold mb-6">➕ Nuevo pedido</h3>
+
+              <div className="grid lg:grid-cols-3 gap-5">
+                <Input
+                  placeholder="Cliente"
+                  value={cliente}
+                  onChange={autocompletarCliente}
+                  list="clientes-list"
+                />
+
+                <Input
+                  placeholder="Número factura"
+                  value={factura}
+                  onChange={setFactura}
+                />
+
+                <Input
+                  type="number"
+                  placeholder="Monto USD"
+                  value={monto}
+                  onChange={setMonto}
+                />
+
+                <Input
+                  type="date"
+                  value={fechaPedido}
+                  onChange={setFechaPedido}
+                />
+
+                <Input
+                  type="date"
+                  value={fechaEntrega}
+                  onChange={setFechaEntrega}
+                />
+
+                <SelectPrioridad value={prioridad} onChange={setPrioridad} />
+
+                <Input
+                  placeholder="Teléfono"
+                  value={telefono}
+                  onChange={setTelefono}
+                />
+
+                <Input
+                  placeholder="Dirección"
+                  value={direccion}
+                  onChange={setDireccion}
+                />
+
+                <Input
+                  placeholder="Departamento"
+                  value={departamento}
+                  onChange={setDepartamento}
+                />
+              </div>
+
+              <textarea
+                placeholder="Observaciones"
+                value={observaciones}
+                onChange={(e) => setObservaciones(e.target.value)}
+                className="w-full mt-5 bg-slate-950 border border-slate-700 rounded-2xl p-5 h-32"
+              />
+
+              <button
+                onClick={guardarEntrega}
+                className="mt-5 bg-cyan-500 hover:bg-cyan-400 text-black font-bold px-6 py-4 rounded-2xl"
+              >
+                Guardar pedido
+              </button>
+            </section>
+          )}
+
+          <GridSection
             titulo="🚚 Pedidos en reparto"
             color="border-cyan-500"
-            entregas={aEntregar}
+            entregas={datosFiltrados.enReparto}
             fechaUY={fechaUY}
             usd={usd}
             seleccionados={seleccionados}
@@ -1362,12 +1018,11 @@ const pedidoSeleccionado = pedidosSeleccionados[0] || null;
           <GridSection
             titulo="📦 Pedidos prontos en depósito"
             color="border-yellow-500"
-            entregas={pendientes}
+            entregas={datosFiltrados.prontosDeposito}
             fechaUY={fechaUY}
             usd={usd}
             seleccionados={seleccionados}
             onSeleccionar={toggleSeleccion}
-          
           />
 
           <section className="bg-slate-900 border border-emerald-500 rounded-3xl p-6 mb-8">
@@ -1375,43 +1030,35 @@ const pedidoSeleccionado = pedidosSeleccionados[0] || null;
               <div>
                 <h2 className="text-2xl font-bold">✅ Historial entregado</h2>
                 <p className="text-slate-400">
-                  Mostrando {entregadosFiltrados.length} entregas
+                  Mostrando {datosFiltrados.historial.length} entregas
                 </p>
               </div>
 
               <div className="flex flex-col md:flex-row gap-3">
                 <select
                   value={filtroHistorial}
-                  onChange={(e) =>
-                    setFiltroHistorial(e.target.value as FiltroHistorial)
-                  }
+                  onChange={(e) => setFiltroHistorial(e.target.value as FiltroHistorial)}
                   className="bg-slate-950 border border-slate-700 rounded-2xl px-5 py-3"
                 >
                   <option value="ultimos5">Últimos 5 días</option>
                   <option value="esteMes">Este mes</option>
                   <option value="porMes">Por mes</option>
-                  <option value="todas">Todas</option>
+                  <option value="todas">Todas (máx. 500)</option>
                 </select>
 
                 {filtroHistorial === "porMes" && (
-                  <select
+                  <input
+                    type="month"
                     value={mesSeleccionado}
                     onChange={(e) => setMesSeleccionado(e.target.value)}
                     className="bg-slate-950 border border-slate-700 rounded-2xl px-5 py-3"
-                  >
-                    <option value="">Seleccionar mes</option>
-                    {mesesDisponibles.map((mes) => (
-                      <option key={mes} value={mes}>
-                        {nombreMes(mes)}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 )}
               </div>
             </div>
 
             <TablaEntregas
-              entregas={entregadosFiltrados}
+              entregas={datosFiltrados.historial}
               fechaUY={fechaUY}
               usd={usd}
               seleccionados={seleccionados}
@@ -1419,15 +1066,37 @@ const pedidoSeleccionado = pedidosSeleccionados[0] || null;
             />
           </section>
 
-          <GridSection
-            titulo="🗑️ Papelera"
-            color="border-red-500"
-            entregas={papelera}
-            fechaUY={fechaUY}
-            usd={usd}
-            seleccionados={seleccionados}
-            onSeleccionar={toggleSeleccion}
-          />
+          <section className="bg-slate-900 border border-red-500 rounded-3xl p-6 mb-8">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 mb-6">
+              <div>
+                <h2 className="text-2xl font-bold">🗑️ Papelera</h2>
+                <p className="text-slate-400">
+                  {papeleraCargada
+                    ? `${datosFiltrados.papelera.length} pedidos`
+                    : "No se carga al abrir para mejorar rendimiento"}
+                </p>
+              </div>
+
+              {!papeleraCargada && (
+                <button
+                  onClick={cargarPapelera}
+                  className="bg-red-500 hover:bg-red-400 text-white font-bold px-5 py-3 rounded-2xl"
+                >
+                  Cargar papelera
+                </button>
+              )}
+            </div>
+
+            {papeleraCargada && (
+              <TablaEntregas
+                entregas={datosFiltrados.papelera}
+                fechaUY={fechaUY}
+                usd={usd}
+                seleccionados={seleccionados}
+                onSeleccionar={toggleSeleccion}
+              />
+            )}
+          </section>
         </section>
       </div>
 
@@ -1508,8 +1177,7 @@ function EditarModal({
 }) {
   function autocompletar(nombre: string) {
     const encontrado = clientes.find(
-      (c) =>
-        c.nombre.trim().toLowerCase() === nombre.trim().toLowerCase()
+      (c) => c.nombre.trim().toLowerCase() === nombre.trim().toLowerCase()
     );
 
     setPedido({
@@ -1574,12 +1242,8 @@ function EditarModal({
 
           <Input
             type="date"
-            value={
-              pedido.fecha_entrega_programada || pedido.fecha_entregado || ""
-            }
-            onChange={(v) =>
-              setPedido({ ...pedido, fecha_entrega_programada: v })
-            }
+            value={pedido.fecha_entrega_programada || pedido.fecha_entregado || ""}
+            onChange={(v) => setPedido({ ...pedido, fecha_entrega_programada: v })}
             placeholder="Fecha entrega"
           />
 
@@ -1609,9 +1273,7 @@ function EditarModal({
 
         <textarea
           value={pedido.observaciones || ""}
-          onChange={(e) =>
-            setPedido({ ...pedido, observaciones: e.target.value })
-          }
+          onChange={(e) => setPedido({ ...pedido, observaciones: e.target.value })}
           placeholder="Observaciones"
           className="w-full mt-5 bg-slate-950 border border-slate-700 rounded-2xl p-5 h-32"
         />
@@ -1724,7 +1386,7 @@ function GridSection({
   fechaUY: (fecha?: string | null) => string;
   usd: (valor: number) => string;
   seleccionados: number[];
-onSeleccionar: (id: number) => void;
+  onSeleccionar: (id: number) => void;
 }) {
   return (
     <section className={`bg-slate-900 border ${color} rounded-3xl p-6 mb-8`}>
@@ -1754,8 +1416,8 @@ function TablaEntregas({
   entregas: Entrega[];
   fechaUY: (fecha?: string | null) => string;
   usd: (valor: number) => string;
-seleccionados: number[];
-onSeleccionar: (id: number) => void;
+  seleccionados: number[];
+  onSeleccionar: (id: number) => void;
 }) {
   return (
     <div className="overflow-auto">
@@ -1778,9 +1440,7 @@ onSeleccionar: (id: number) => void;
                 <input
                   type="checkbox"
                   checked={seleccionados.includes(e.id)}
-                 onChange={() =>
-                 onSeleccionar(e.id)
-                }
+                  onChange={() => onSeleccionar(e.id)}
                   className="h-5 w-5"
                 />
               </td>
@@ -1809,9 +1469,7 @@ onSeleccionar: (id: number) => void;
 
               <td>{e.numero_factura}</td>
 
-              <td>
-                {fechaUY(e.fecha_entrega_programada || e.fecha_entregado)}
-              </td>
+              <td>{fechaUY(e.fecha_entrega_programada || e.fecha_entregado)}</td>
 
               <td>
                 <span

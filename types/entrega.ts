@@ -33,4 +33,8 @@ export interface Entrega {
   departamento?: string | null;
 
   created_at?: string;
+qr_token?: string | null;
+
+fecha_qr_entregado?: string | null;
+
 }

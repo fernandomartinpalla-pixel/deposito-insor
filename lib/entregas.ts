@@ -114,17 +114,31 @@ export async function guardarEntrega(params: {
   const { error } = await supabase.from("entregas").insert([
     {
       cliente: params.cliente.trim(),
+
       fecha_pedido: params.fechaPedido,
+
       fecha_entrega_programada: params.fechaEntrega,
+
       fecha_entregado: params.fechaEntrega,
+
       numero_factura: params.factura.trim(),
+
       monto: Number(params.monto),
+
       observaciones: params.observaciones.trim(),
+
       prioridad: params.prioridad,
+
       telefono_cliente: params.telefono.trim(),
+
       direccion: params.direccion.trim(),
+
       departamento: params.departamento.trim(),
+
       estado: "pendiente",
+
+      // NUEVO
+      qr_token: crypto.randomUUID(),
     },
   ]);
 

@@ -56,7 +56,23 @@ export function imprimirEtiquetas(pedidos: PedidoEtiqueta[]) {
               </div>
             </div>
           </div>
+         <div class="qr-area">
 
+  <div class="qr-box">
+
+    <img
+      src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
+        `${window.location.origin}/entrega/${pedido.qr_token}`
+      )}"
+    />
+
+  </div>
+
+  <div class="qr-text">
+    Escanear al entregar
+  </div>
+
+</div>
           <div class="bottom">
             <div class="small-box">
               <div class="label-title">Agencia</div>
@@ -277,7 +293,47 @@ export function imprimirEtiquetas(pedidos: PedidoEtiqueta[]) {
             body {
               print-color-adjust: exact;
               -webkit-print-color-adjust: exact;
-            }
+            .qr-area{
+display:flex;
+flex-direction:column;
+
+align-items:center;
+
+margin-top:12px;
+
+margin-bottom:12px;
+}
+
+.qr-box{
+
+border:2px solid #111;
+
+padding:8px;
+
+background:white;
+
+}
+
+.qr-box img{
+
+width:160px;
+
+height:160px;
+
+display:block;
+
+}
+
+.qr-text{
+
+margin-top:8px;
+
+font-size:12px;
+
+font-weight:900;
+
+}
+              }
           }
         </style>
       </head>

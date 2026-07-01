@@ -16,17 +16,13 @@ export default function Page({
       const { error } =
         await supabase
           .from("entregas")
-          .update({
-            estado: "entregado",
-            fecha_entregado_real:
-              new Date().toISOString(),
-
-            fecha_qr_entregado:
-              new Date().toISOString(),
-          })
-          .eq(
-            "qr_token",
-            params.token
+.update({
+  estado: "entregado",
+  fecha_entregado: new Date().toISOString(),
+  fecha_entregado_real: new Date().toISOString(),
+  fecha_qr_entregado: new Date().toISOString(),
+})
+          .eq("qr_token",params.token
           );
 
       if (error) {

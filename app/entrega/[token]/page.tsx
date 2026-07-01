@@ -14,7 +14,7 @@ export default function Page({
     async function registrarEntrega() {
       const ahora = new Date().toISOString();
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("entregas")
         .update({
           estado: "entregado",
@@ -22,22 +22,19 @@ export default function Page({
           fecha_entregado_real: ahora,
           fecha_qr_entregado: ahora,
         })
-        .eq("qr_token", params.token)
-        .select("id, cliente, estado")
-        .single();
+        .eq("qr_token", params.token);
 
       if (error) {
-        console.error(error);
+        console.error("Error QR:", error);
         setMensaje("❌ No se pudo registrar la entrega");
         return;
       }
 
-      if (!data) {
-        setMensaje("❌ No se encontró el pedido");
-        return;
-      }
-
       setMensaje("✅ Pedido entregado correctamente");
+
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 2000);
     }
 
     registrarEntrega();
@@ -51,14 +48,14 @@ export default function Page({
         <h1 className="text-3xl font-bold mb-4">{mensaje}</h1>
 
         <p className="text-slate-400 mb-8">
-          Si el pedido fue registrado correctamente, ya podés cerrar esta pantalla.
+          Esta pantalla vuelve sola al sistema.
         </p>
 
         <button
-          onClick={() => window.close()}
+          onClick={() => (window.location.href = "/")}
           className="w-full rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-4 transition"
         >
-          Cerrar
+          Volver
         </button>
       </div>
     </main>

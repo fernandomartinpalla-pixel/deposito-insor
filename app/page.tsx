@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 
 import { supabase } from "@/lib/supabase";
-import { imprimirEtiquetas } from "../lib/etiquetas";
+import { imprimirEtiquetasTermica as imprimirEtiquetas } from "@/lib/etiquetasTermica";
 
 import CentroOperaciones from "@/components/CentroOperaciones";
 import PanelNuevoPedido from "@/components/PanelNuevoPedido";

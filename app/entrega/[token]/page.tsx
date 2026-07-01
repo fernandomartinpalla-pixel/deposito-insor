@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 export default function Page({
@@ -9,7 +10,7 @@ export default function Page({
   params: { token: string };
 }) {
   const [mensaje, setMensaje] = useState("Registrando entrega...");
-
+  const router = useRouter();
   useEffect(() => {
     async function registrarEntrega() {
       const { error } = await supabase
@@ -29,7 +30,9 @@ export default function Page({
 
       setMensaje("✅ Pedido entregado correctamente");
     }
-
+setTimeout(() => {
+  router.push("/");
+}, 2000);
     registrarEntrega();
   }, [params.token]);
 

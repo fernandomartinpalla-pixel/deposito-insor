@@ -1,17 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-export default function Page({
-  params,
-}: {
-  params: { token: string };
-}) {
+export default function Page() {
+  const params = useParams();
+  const token = params?.token as string;
+
   const [mensaje, setMensaje] = useState("Registrando entrega...");
 
   useEffect(() => {
     async function registrarEntrega() {
+      if (!token) {
+        setMensaje("❌ Token no encontrado");
+        return;
+      }
+
       const ahora = new Date().toISOString();
 
       const { error } = await supabase
@@ -22,10 +27,10 @@ export default function Page({
           fecha_entregado_real: ahora,
           fecha_qr_entregado: ahora,
         })
-        .eq("qr_token", params.token);
+        .eq("qr_token", token);
 
       if (error) {
-        console.error(error);
+        console.error("Error QR:", error);
         setMensaje(`❌ ${error.message}`);
         return;
       }
@@ -34,7 +39,7 @@ export default function Page({
     }
 
     registrarEntrega();
-  }, [params.token]);
+  }, [token]);
 
   return (
     <main className="min-h-screen bg-slate-950 flex items-center justify-center p-6">

@@ -25,7 +25,6 @@ export async function cargarPedidosEnReparto(): Promise<Entrega[]> {
     .order("fecha_entrega_programada", { ascending: true });
 
   if (error) throw error;
-
   return normalizarEntregas(data || []);
 }
 
@@ -37,7 +36,6 @@ export async function cargarPedidosProntosDeposito(): Promise<Entrega[]> {
     .order("fecha_entrega_programada", { ascending: true });
 
   if (error) throw error;
-
   return normalizarEntregas(data || []);
 }
 
@@ -50,7 +48,6 @@ export async function cargarPapelera(): Promise<Entrega[]> {
     .limit(500);
 
   if (error) throw error;
-
   return normalizarEntregas(data || []);
 }
 
@@ -95,7 +92,6 @@ export async function cargarHistorial(params: {
   const { data, error } = await query;
 
   if (error) throw error;
-
   return normalizarEntregas(data || []);
 }
 
@@ -114,30 +110,17 @@ export async function guardarEntrega(params: {
   const { error } = await supabase.from("entregas").insert([
     {
       cliente: params.cliente.trim(),
-
       fecha_pedido: params.fechaPedido,
-
       fecha_entrega_programada: params.fechaEntrega,
-
       fecha_entregado: params.fechaEntrega,
-
       numero_factura: params.factura.trim(),
-
       monto: Number(params.monto),
-
       observaciones: params.observaciones.trim(),
-
       prioridad: params.prioridad,
-
       telefono_cliente: params.telefono.trim(),
-
       direccion: params.direccion.trim(),
-
       departamento: params.departamento.trim(),
-
       estado: "pendiente",
-
-      // NUEVO
       qr_token: crypto.randomUUID(),
     },
   ]);
@@ -152,8 +135,7 @@ export async function actualizarEntrega(pedido: Entrega) {
       cliente: pedido.cliente,
       fecha_pedido: pedido.fecha_pedido,
       fecha_entrega_programada: pedido.fecha_entrega_programada,
-      fecha_entregado:
-        pedido.fecha_entrega_programada || pedido.fecha_entregado,
+      fecha_entregado: pedido.fecha_entrega_programada || pedido.fecha_entregado,
       numero_factura: pedido.numero_factura,
       monto: Number(pedido.monto),
       observaciones: pedido.observaciones,
@@ -175,8 +157,11 @@ export async function cambiarEstadoPedidos(
     estado,
   };
 
+  const ahora = new Date().toISOString();
+
   if (estado === "entregado") {
-    updateData.fecha_entregado_real = new Date().toISOString();
+    updateData.fecha_entregado = ahora;
+    updateData.fecha_entregado_real = ahora;
   }
 
   const { error } = await supabase

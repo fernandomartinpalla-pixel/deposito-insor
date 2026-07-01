@@ -1,6 +1,8 @@
 export type PedidoEtiqueta = {
-  cliente: string;
-  numero_factura: string;
+  id?: number;
+  cliente?: string | null;
+  numero_factura?: string | null;
+  qr_token?: string | null;
   direccion?: string | null;
   telefono_cliente?: string | null;
   departamento?: string | null;
@@ -60,11 +62,11 @@ export function imprimirEtiquetas(pedidos: PedidoEtiqueta[]) {
 
   <div class="qr-box">
 
-    <img
-      src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
-        `${window.location.origin}/entrega/${pedido.qr_token}`
-      )}"
-    />
+<img
+src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
+`https://deposito-insor.vercel.app/entrega/${(pedido as any).qr_token?? ""}`
+)}"
+/>
 
   </div>
 
@@ -282,58 +284,45 @@ export function imprimirEtiquetas(pedidos: PedidoEtiqueta[]) {
             font-size: 12px;
             font-weight: 900;
             margin-bottom: 5px;
-          }
+          }@media print {
 
           .obs-text {
             font-size: 12px;
             line-height: 1.4;
           }
 
-          @media print {
-            body {
-              print-color-adjust: exact;
-              -webkit-print-color-adjust: exact;
-            .qr-area{
+.qr-area{
 display:flex;
 flex-direction:column;
-
 align-items:center;
-
 margin-top:12px;
-
 margin-bottom:12px;
 }
 
 .qr-box{
-
 border:2px solid #111;
-
 padding:8px;
-
 background:white;
-
 }
 
 .qr-box img{
-
 width:160px;
-
 height:160px;
-
 display:block;
-
 }
 
 .qr-text{
-
 margin-top:8px;
-
 font-size:12px;
-
 font-weight:900;
-
 }
-              }
+
+@media print {
+body{
+print-color-adjust:exact;
+-webkit-print-color-adjust:exact;
+}
+}
           }
         </style>
       </head>

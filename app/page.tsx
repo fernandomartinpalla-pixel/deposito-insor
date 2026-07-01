@@ -440,7 +440,9 @@ export default function Home() {
       return;
     }
 
-    const pedidos = todosLosPedidos.filter((e) => seleccionados.includes(e.id));
+    const pedidos = todosLosPedidos.filter((e) =>
+      seleccionados.includes(e.id)
+    );
 
     imprimirEtiquetas(pedidos);
   }
@@ -476,7 +478,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
-      <div className="flex">
+      <div className="flex flex-col lg:flex-row">
         <SidebarDeposito
           email={user.email}
           enReparto={enReparto.length}
@@ -487,10 +489,10 @@ export default function Home() {
           onLogout={logout}
         />
 
-        <section className="flex-1 p-8">
+        <section className="flex-1 p-4 lg:p-8">
           <div className="flex flex-col lg:flex-row gap-5 justify-between mb-8">
             <div>
-              <h2 className="text-5xl font-bold">Depósito Insor</h2>
+              <h2 className="text-4xl lg:text-5xl font-bold">Depósito Insor</h2>
               <p className="text-slate-400 mt-2">
                 Centro de operaciones, pedidos y entregas
                 {cargandoDatos ? " · cargando datos..." : ""}
@@ -555,7 +557,6 @@ export default function Home() {
               onSeleccionar={toggleSeleccion}
               onEditar={setEditando}
               onImprimirEtiqueta={(pedido) => imprimirEtiquetas([pedido])}
-              onCambiarEstadoPedido={cambiarEstadoPedido}
             />
           )}
 
@@ -568,7 +569,6 @@ export default function Home() {
               onSeleccionar={toggleSeleccion}
               onEditar={setEditando}
               onImprimirEtiqueta={(pedido) => imprimirEtiquetas([pedido])}
-              onCambiarEstadoPedido={cambiarEstadoPedido}
             />
           )}
 
@@ -615,7 +615,6 @@ export default function Home() {
                 onSeleccionar={toggleSeleccion}
                 onEditar={setEditando}
                 onImprimirEtiqueta={(pedido) => imprimirEtiquetas([pedido])}
-                onCambiarEstadoPedido={cambiarEstadoPedido}
               />
             </section>
           )}
@@ -651,7 +650,6 @@ export default function Home() {
                   onSeleccionar={toggleSeleccion}
                   onEditar={setEditando}
                   onImprimirEtiqueta={(pedido) => imprimirEtiquetas([pedido])}
-                  onCambiarEstadoPedido={cambiarEstadoPedido}
                 />
               )}
             </section>

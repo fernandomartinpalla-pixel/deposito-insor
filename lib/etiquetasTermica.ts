@@ -23,64 +23,39 @@ export function imprimirEtiquetasTermica(pedidos: PedidoEtiquetaTermica[]) {
       const qrUrl = `${BASE_URL}/entrega/${pedido.qr_token ?? ""}`;
 
       return `
-        <section class="etiqueta">
-          <header class="encabezado">
+        <section class="label">
+          <div class="top">
             <div class="logo">INSOR</div>
             <div class="empresa">
-              <strong>INSOR INTERNACIONAL SAS</strong>
-              <span>Remitente · Av. General Flores 3289 · Montevideo · Tel. 2203 7185</span>
+              <div class="empresa-nombre">INSOR INTERNACIONAL SAS</div>
+              <div>Av. General Flores 3289 - Montevideo</div>
+              <div>Tel. 2203 7185</div>
             </div>
-          </header>
+          </div>
 
-          <section class="destinatario">
-            <div class="titulo">DESTINATARIO</div>
-            <div class="nombre">${limpiar(pedido.cliente)}</div>
+          <div class="destino">
+            <div class="tag">DESTINATARIO</div>
+            <div class="cliente">${limpiar(pedido.cliente)}</div>
             <div class="direccion">${limpiar(pedido.direccion)}</div>
             <div class="departamento">${limpiar(pedido.departamento)}</div>
-            <div class="telefono">TEL: ${limpiar(pedido.telefono_cliente)}</div>
-          </section>
+            <div class="telefono">TEL. ${limpiar(pedido.telefono_cliente)}</div>
+          </div>
 
-          <section class="datos">
-            <div>
-              <span>FACTURA</span>
-              <strong>${limpiar(pedido.numero_factura)}</strong>
+          <div class="abajo">
+            <div class="datos">
+              <div><b>FACTURA</b><span>${limpiar(pedido.numero_factura)}</span></div>
+              <div><b>PEDIDO</b><span>#${pedido.id ?? "-"}</span></div>
+              <div><b>FECHA</b><span>${fecha}</span></div>
+              <div class="cuidado">MANIPULAR CON CUIDADO · FRÁGIL · ESTE LADO ARRIBA</div>
             </div>
 
-            <div>
-              <span>FECHA</span>
-              <strong>${fecha}</strong>
-            </div>
-
-            <div>
-              <span>PEDIDO</span>
-              <strong>#${pedido.id ?? "-"}</strong>
-            </div>
-          </section>
-
-          <section class="qr">
-            <img
-              src="https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(
+            <div class="qr">
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(
                 qrUrl
-              )}"
-              alt="QR entrega"
-            />
-            <div class="qr-text">ESCANEAR AL ENTREGAR</div>
-            <div class="qr-code">${(pedido.qr_token ?? "").slice(0, 8).toUpperCase()}</div>
-          </section>
-
-          ${
-            pedido.observaciones
-              ? `
-                <section class="observaciones">
-                  <strong>OBS:</strong> ${pedido.observaciones}
-                </section>
-              `
-              : `
-                <section class="observaciones vacia">
-                  MANIPULAR MERCADERÍA CON PRECAUCIÓN
-                </section>
-              `
-          }
+              )}" />
+              <div>ESCANEAR AL ENTREGAR</div>
+            </div>
+          </div>
         </section>
       `;
     })
@@ -90,11 +65,12 @@ export function imprimirEtiquetasTermica(pedidos: PedidoEtiquetaTermica[]) {
     <!DOCTYPE html>
     <html>
       <head>
-        <title>Etiquetas térmicas INSOR</title>
+        <meta charset="UTF-8" />
+        <title>Etiquetas INSOR</title>
 
         <style>
           @page {
-            size: 100mm 150mm;
+            size: 150mm 100mm;
             margin: 0;
           }
 
@@ -102,171 +78,170 @@ export function imprimirEtiquetasTermica(pedidos: PedidoEtiquetaTermica[]) {
             box-sizing: border-box;
           }
 
-          html,
-          body {
-            width: 100mm;
+          html, body {
+            width: 150mm;
             margin: 0;
             padding: 0;
             background: white;
-            color: #000;
+            color: black;
             font-family: Arial, Helvetica, sans-serif;
           }
 
-          .etiqueta {
-            width: 100mm;
-            height: 150mm;
+          .label {
+            width: 150mm;
+            height: 100mm;
             padding: 5mm;
             page-break-after: always;
             overflow: hidden;
+            border: 2px solid #000;
             background: white;
           }
 
-          .encabezado {
+          .top {
+            height: 20mm;
             display: flex;
-            border: 2px solid #000;
-            margin-bottom: 4mm;
+            align-items: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 3mm;
           }
 
           .logo {
-            width: 27mm;
-            background: #000;
-            color: #fff;
+            width: 38mm;
+            height: 14mm;
+            background: black;
+            color: white;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 19pt;
+            font-size: 25pt;
             font-weight: 900;
             letter-spacing: 1px;
           }
 
           .empresa {
-            flex: 1;
-            padding: 3mm;
-            font-size: 9pt;
-            line-height: 1.25;
+            margin-left: 5mm;
+            line-height: 1.15;
           }
 
-          .empresa strong {
-            display: block;
-            font-size: 12pt;
+          .empresa-nombre {
+            font-size: 16pt;
+            font-weight: 800;
             margin-bottom: 1mm;
           }
 
-          .empresa span {
-            display: block;
+          .empresa div:not(.empresa-nombre) {
+            font-size: 10pt;
             font-weight: 700;
           }
 
-          .destinatario {
-            border: 2px solid #000;
-            padding: 4mm;
-            margin-bottom: 4mm;
-            min-height: 43mm;
+          .destino {
+            height: 43mm;
+            text-align: center;
+            padding-top: 3mm;
+            border-bottom: 2px solid #000;
           }
 
-          .titulo {
-            font-size: 9pt;
-            font-weight: 900;
+          .tag {
+            display: inline-block;
+            background: black;
+            color: white;
+            font-size: 12pt;
+            font-weight: 800;
             letter-spacing: 1px;
-            margin-bottom: 2mm;
+            padding: 1.5mm 8mm;
+            margin-bottom: 3mm;
           }
 
-          .nombre {
-            font-size: 24pt;
-            font-weight: 900;
+          .cliente {
+            font-size: 12pt;
+            font-weight: 800;
             line-height: 1;
             text-transform: uppercase;
             margin-bottom: 3mm;
           }
 
           .direccion {
-            font-size: 15pt;
-            font-weight: 900;
-            line-height: 1.12;
+            font-size: 12pt;
+            font-weight: 800;
+            text-transform: uppercase;
+            line-height: 0.2;
             margin-bottom: 2mm;
           }
 
           .departamento {
-            font-size: 18pt;
-            font-weight: 900;
+            font-size: 12pt;
+            font-weight: 800;
             text-transform: uppercase;
             margin-bottom: 2mm;
           }
 
           .telefono {
             font-size: 12pt;
-            font-weight: 900;
+            font-weight: 800;
+          }
+
+          .abajo {
+            height: 27mm;
+            display: flex;
+            padding-top: 3mm;
           }
 
           .datos {
+            width: 83mm;
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
-            border: 2px solid #000;
-            margin-bottom: 4mm;
+            gap: 2mm;
+            padding-right: 2mm;
           }
 
           .datos div {
-            padding: 2.5mm;
-            border-right: 2px solid #000;
-            min-height: 14mm;
+            border: 1px solid #000;
+            text-align: center;
+            padding: 0mm;
+            height: 11mm;
           }
 
-          .datos div:last-child {
-            border-right: none;
+          .datos b {
+            display: block;
+            font-size: 10pt;
+            margin-bottom: 1mm;
           }
 
           .datos span {
             display: block;
-            font-size: 7pt;
+            font-size: 10pt;
             font-weight: 900;
-            margin-bottom: 1mm;
           }
 
-          .datos strong {
-            display: block;
-            font-size: 12pt;
+          .datos .cuidado {
+            grid-column: span 3;
+            height: 9mm;
+            font-size: 9pt;
             font-weight: 900;
+            padding-top: 0mm;
           }
 
           .qr {
+            width: 60mm;
             text-align: center;
-            margin-bottom: 4mm;
+            border-left: 2px solid #000;
+            padding-left: 0mm;
           }
 
           .qr img {
-            width: 47mm;
-            height: 47mm;
+            width: 29mm;
+            height: 29mm;
             display: block;
-            margin: 0 auto;
+            margin: -2mm auto 1mm;
           }
 
-          .qr-text {
-            font-size: 10pt;
-            font-weight: 900;
-            margin-top: 1mm;
-            letter-spacing: 1px;
-          }
-
-          .qr-code {
-            font-size: 8pt;
-            font-weight: 900;
-            margin-top: 1mm;
-          }
-
-          .observaciones {
-            border: 2px dashed #000;
-            padding: 3mm;
-            font-size: 11pt;
+          .qr div {
+            display: inline-block;
+            background: black;
+            color: white;
+            font-size: 4pt;
             font-weight: 800;
-            line-height: 1.2;
-            min-height: 16mm;
-          }
-
-          .observaciones.vacia {
-            text-align: center;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            padding: 1mm 0mm;
           }
 
           @media print {

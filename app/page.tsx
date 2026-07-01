@@ -145,7 +145,20 @@ export default function Home() {
     if (!user) return;
     cargarHistorialVisible();
   }, [filtroHistorial, mesSeleccionado, user]);
+  useEffect(() => {
+  if (!user) return;
 
+  const intervalo = setInterval(() => {
+    cargarPedidosActivos();
+    cargarHistorialVisible();
+
+    if (papeleraCargada) {
+      cargarPapeleraVisible();
+    }
+  }, 5000);
+
+  return () => clearInterval(intervalo);
+}, [user, filtroHistorial, mesSeleccionado, papeleraCargada]);
   useEffect(() => {
     setSeleccionados([]);
   }, [tabActiva]);

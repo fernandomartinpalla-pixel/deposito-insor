@@ -12,40 +12,49 @@ export default function Page({
 
   useEffect(() => {
     async function registrarEntrega() {
-      const { data, error } = await supabase.rpc(
-        "confirmar_entrega_por_qr",
-        {
-          p_token: params.token,
-        }
-      );
+      const ahora = new Date().toISOString();
 
-if (error) {
-  console.error("Error QR:", error);
-  setMensaje(`❌ ${error.message}`);
-  return;
-}
+      const { error } = await supabase
+        .from("entregas")
+        .update({
+          estado: "entregado",
+          fecha_entregado: ahora,
+          fecha_entregado_real: ahora,
+          fecha_qr_entregado: ahora,
+        })
+        .eq("qr_token", params.token);
 
-      if (!data) {
-        setMensaje("❌ No se encontró el pedido");
+      if (error) {
+        console.error(error);
+        setMensaje(`❌ ${error.message}`);
         return;
       }
 
-      setMensaje(`✅ Pedido #${data} entregado correctamente`);
+      setMensaje("✅ Pedido entregado correctamente");
     }
 
     registrarEntrega();
   }, [params.token]);
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
+    <main className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
       <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 max-w-md w-full text-center shadow-2xl">
         <div className="text-6xl mb-6">📦</div>
 
-        <h1 className="text-3xl font-bold mb-4">{mensaje}</h1>
+        <h1 className="text-3xl font-bold text-white mb-4">
+          {mensaje}
+        </h1>
 
         <p className="text-slate-400 mb-8">
           Ya podés cerrar esta pantalla.
         </p>
+
+        <button
+          onClick={() => window.close()}
+          className="w-full rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-4 transition"
+        >
+          Cerrar
+        </button>
       </div>
     </main>
   );

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 export default function Page({
@@ -10,46 +9,49 @@ export default function Page({
   params: { token: string };
 }) {
   const [mensaje, setMensaje] = useState("Registrando entrega...");
-  const router = useRouter();
+
   useEffect(() => {
     async function registrarEntrega() {
-      const { error } = await supabase
+      const ahora = new Date().toISOString();
+
+      const { data, error } = await supabase
         .from("entregas")
         .update({
           estado: "entregado",
-          fecha_entregado: new Date().toISOString(),
-          fecha_entregado_real: new Date().toISOString(),
-          fecha_qr_entregado: new Date().toISOString(),
+          fecha_entregado: ahora,
+          fecha_entregado_real: ahora,
+          fecha_qr_entregado: ahora,
         })
-        .eq("qr_token", params.token);
+        .eq("qr_token", params.token)
+        .select("id, cliente, estado")
+        .single();
 
       if (error) {
-        setMensaje("❌ Error registrando la entrega");
+        console.error(error);
+        setMensaje("❌ No se pudo registrar la entrega");
+        return;
+      }
+
+      if (!data) {
+        setMensaje("❌ No se encontró el pedido");
         return;
       }
 
       setMensaje("✅ Pedido entregado correctamente");
     }
-setTimeout(() => {
-  router.push("/");
-}, 2000);
+
     registrarEntrega();
   }, [params.token]);
 
   return (
     <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
       <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 max-w-md w-full text-center shadow-2xl">
+        <div className="text-6xl mb-6">📦</div>
 
-        <div className="text-6xl mb-6">
-          📦
-        </div>
-
-        <h1 className="text-3xl font-bold mb-4">
-          {mensaje}
-        </h1>
+        <h1 className="text-3xl font-bold mb-4">{mensaje}</h1>
 
         <p className="text-slate-400 mb-8">
-          Si la entrega fue registrada correctamente, ya podés cerrar esta pantalla.
+          Si el pedido fue registrado correctamente, ya podés cerrar esta pantalla.
         </p>
 
         <button
@@ -58,7 +60,6 @@ setTimeout(() => {
         >
           Cerrar
         </button>
-
       </div>
     </main>
   );

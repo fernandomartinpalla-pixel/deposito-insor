@@ -19,11 +19,11 @@ export default function Page({
         }
       );
 
-      if (error) {
-        console.error("Error QR:", error);
-        setMensaje("❌ No se pudo registrar la entrega");
-        return;
-      }
+if (error) {
+  console.error("Error QR:", error);
+  setMensaje(`❌ ${error.message}`);
+  return;
+}
 
       if (!data) {
         setMensaje("❌ No se encontró el pedido");

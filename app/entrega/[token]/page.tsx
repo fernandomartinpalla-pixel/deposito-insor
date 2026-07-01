@@ -12,17 +12,12 @@ export default function Page({
 
   useEffect(() => {
     async function registrarEntrega() {
-      const ahora = new Date().toISOString();
-
-      const { error } = await supabase
-        .from("entregas")
-        .update({
-          estado: "entregado",
-          fecha_entregado: ahora,
-          fecha_entregado_real: ahora,
-          fecha_qr_entregado: ahora,
-        })
-        .eq("qr_token", params.token);
+      const { data, error } = await supabase.rpc(
+        "confirmar_entrega_por_qr",
+        {
+          p_token: params.token,
+        }
+      );
 
       if (error) {
         console.error("Error QR:", error);
@@ -30,11 +25,12 @@ export default function Page({
         return;
       }
 
-      setMensaje("✅ Pedido entregado correctamente");
+      if (!data) {
+        setMensaje("❌ No se encontró el pedido");
+        return;
+      }
 
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 2000);
+      setMensaje(`✅ Pedido #${data} entregado correctamente`);
     }
 
     registrarEntrega();
@@ -48,15 +44,8 @@ export default function Page({
         <h1 className="text-3xl font-bold mb-4">{mensaje}</h1>
 
         <p className="text-slate-400 mb-8">
-          Esta pantalla vuelve sola al sistema.
+          Ya podés cerrar esta pantalla.
         </p>
-
-        <button
-          onClick={() => (window.location.href = "/")}
-          className="w-full rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-4 transition"
-        >
-          Volver
-        </button>
       </div>
     </main>
   );

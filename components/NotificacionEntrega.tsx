@@ -17,7 +17,7 @@ export default function NotificacionEntrega({
 }: Props) {
   const [mostrar, setMostrar] = useState(visible);
   const [completado, setCompletado] = useState(false);
-  const sonido = new Audio("/sounds/ding.wav");
+
   useEffect(() => {
     if (!visible) {
       setMostrar(false);
@@ -28,13 +28,59 @@ export default function NotificacionEntrega({
     setMostrar(true);
     setCompletado(false);
 
-const timerCamion = window.setTimeout(() => {
-  setCompletado(true);
+    const timerCamion = window.setTimeout(() => {
+      setCompletado(true);
 
-  const sonido = new Audio("/sounds/ding.mp3");
-  sonido.volume = 0.35;
-  sonido.play().catch(() => {});
-}, 1400);
+      try {
+        const AudioContextClass =
+          window.AudioContext ||
+          (
+            window as typeof window & {
+              webkitAudioContext?: typeof AudioContext;
+            }
+          ).webkitAudioContext;
+
+        if (!AudioContextClass) return;
+
+        const audioContext = new AudioContextClass();
+
+        const oscilador1 = audioContext.createOscillator();
+        const oscilador2 = audioContext.createOscillator();
+        const ganancia = audioContext.createGain();
+
+        const inicio = audioContext.currentTime;
+
+        oscilador1.type = "sine";
+        oscilador1.frequency.setValueAtTime(880, inicio);
+        oscilador1.frequency.exponentialRampToValueAtTime(
+          1100,
+          inicio + 0.15
+        );
+
+        oscilador2.type = "sine";
+        oscilador2.frequency.setValueAtTime(1320, inicio + 0.12);
+
+        ganancia.gain.setValueAtTime(0.0001, inicio);
+        ganancia.gain.exponentialRampToValueAtTime(0.12, inicio + 0.02);
+        ganancia.gain.exponentialRampToValueAtTime(0.0001, inicio + 0.4);
+
+        oscilador1.connect(ganancia);
+        oscilador2.connect(ganancia);
+        ganancia.connect(audioContext.destination);
+
+        oscilador1.start(inicio);
+        oscilador1.stop(inicio + 0.22);
+
+        oscilador2.start(inicio + 0.12);
+        oscilador2.stop(inicio + 0.4);
+
+        window.setTimeout(() => {
+          audioContext.close().catch(() => {});
+        }, 700);
+      } catch (error) {
+        console.error("No se pudo reproducir el sonido:", error);
+      }
+    }, 1400);
 
     const timerCerrar = window.setTimeout(() => {
       setMostrar(false);
@@ -66,7 +112,9 @@ const timerCamion = window.setTimeout(() => {
                   completado ? "text-emerald-300" : "text-cyan-300"
                 }`}
               >
-                {completado ? "Entrega confirmada" : "Registrando entrega"}
+                {completado
+                  ? "Entrega confirmada"
+                  : "Registrando entrega"}
               </p>
 
               <h3 className="mt-2 text-2xl font-black text-white">
@@ -115,7 +163,7 @@ const timerCamion = window.setTimeout(() => {
             <div
               className={`flex h-11 w-11 items-center justify-center rounded-full text-xl font-black transition-all duration-500 ${
                 completado
-                  ? "scale-100 bg-emerald-400 text-emerald-950"
+                  ? "scale-110 bg-emerald-400 text-emerald-950"
                   : "scale-90 bg-cyan-400/20 text-cyan-200"
               }`}
             >
@@ -139,7 +187,9 @@ const timerCamion = window.setTimeout(() => {
         <div className="h-1 bg-white/10">
           <div
             className={`h-full transition-all duration-[5500ms] ease-linear ${
-              completado ? "w-full bg-emerald-400" : "w-1/4 bg-cyan-400"
+              completado
+                ? "w-full bg-emerald-400"
+                : "w-1/4 bg-cyan-400"
             }`}
           />
         </div>

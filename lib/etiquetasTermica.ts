@@ -46,9 +46,8 @@ export function imprimirEtiquetasTermica(pedidos: PedidoEtiquetaTermica[]) {
               <div><b>FACTURA</b><span>${limpiar(pedido.numero_factura)}</span></div>
               <div><b>PEDIDO</b><span>#${pedido.id ?? "-"}</span></div>
               <div><b>FECHA</b><span>${fecha}</span></div>
-              <div class="cuidado">MANIPULAR CON CUIDADO · FRÁGIL · ESTE LADO ARRIBA</div>
+              <div class="cuidado">ESCANEA AL RECIBIR PARA HACERNOS SABER QUE RECIBISTE</div>
             </div>
-
             <div class="qr">
               <img src="https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(
                 qrUrl

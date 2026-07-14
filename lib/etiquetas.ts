@@ -179,7 +179,7 @@ export function imprimirEtiquetas(pedidos: PedidoEtiqueta[]) {
             display: flex;
             justify-content: space-between;
             gap: 3mm;
-            border: 2px solid #111;
+            border: 4px solid #111;
             padding: 3mm;
             font-size: 13px;
             margin-bottom: 3mm;

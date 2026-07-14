@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 
 import { supabase } from "@/lib/supabase";
@@ -14,6 +14,7 @@ import LoginScreen from "@/components/LoginScreen";
 import BarraAcciones from "@/components/BarraAcciones";
 import SeccionPedidos from "@/components/SeccionPedidos";
 import ModalEditar from "@/components/ModalEditar";
+import NotificacionEntrega from "@/components/NotificacionEntrega";
 
 import type {
   Entrega,
@@ -79,6 +80,15 @@ export default function Home() {
   const [editando, setEditando] = useState<Entrega | null>(null);
   const [seleccionados, setSeleccionados] = useState<number[]>([]);
 
+  const [notificacionEntrega, setNotificacionEntrega] = useState<{
+    pedidoId: number;
+    cliente: string;
+  } | null>(null);
+
+  const cerrarNotificacionEntrega = useCallback(() => {
+    setNotificacionEntrega(null);
+  }, []);
+
   const [filtroHistorial, setFiltroHistorial] =
     useState<FiltroHistorial>("ultimos5");
   const [mesSeleccionado, setMesSeleccionado] = useState(
@@ -116,10 +126,27 @@ export default function Home() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "entregas" },
-        () => {
+        (payload) => {
+          const pedidoNuevo = payload.new as Entrega | undefined;
+          const pedidoAnterior = payload.old as Partial<Entrega> | undefined;
+
+          if (
+            payload.eventType === "UPDATE" &&
+            pedidoNuevo?.estado === "entregado" &&
+            pedidoAnterior?.estado !== "entregado"
+          ) {
+            setNotificacionEntrega({
+              pedidoId: pedidoNuevo.id,
+              cliente: pedidoNuevo.cliente || "Cliente sin nombre",
+            });
+          }
+
           cargarPedidosActivos();
           cargarHistorialVisible();
-          if (papeleraCargada) cargarPapeleraVisible();
+
+          if (papeleraCargada) {
+            cargarPapeleraVisible();
+          }
         }
       )
       .on(
@@ -491,6 +518,13 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
+      <NotificacionEntrega
+        visible={notificacionEntrega !== null}
+        pedidoId={notificacionEntrega?.pedidoId}
+        cliente={notificacionEntrega?.cliente}
+        onCerrar={cerrarNotificacionEntrega}
+      />
+
       <div className="flex flex-col lg:flex-row">
         <SidebarDeposito
           email={user.email}

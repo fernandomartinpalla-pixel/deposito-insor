@@ -256,12 +256,17 @@ export function imprimirEtiquetasTermica(pedidos: PedidoEtiquetaTermica[]) {
         ${etiquetasHtml}
 
         <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.focus();
-              window.print();
-            }, 500);
-          };
+window.onload = function () {
+  setTimeout(function () {
+    window.focus();
+    window.print();
+  }, 500);
+
+  // Cerrar la ventana unos segundos después
+  setTimeout(function () {
+    window.close();
+  }, 8000);
+};
         </script>
       </body>
     </html>

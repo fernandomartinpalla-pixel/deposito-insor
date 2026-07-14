@@ -17,7 +17,7 @@ export default function NotificacionEntrega({
 }: Props) {
   const [mostrar, setMostrar] = useState(visible);
   const [completado, setCompletado] = useState(false);
-
+  const sonido = new Audio("/sounds/ding.wav");
   useEffect(() => {
     if (!visible) {
       setMostrar(false);
@@ -28,9 +28,13 @@ export default function NotificacionEntrega({
     setMostrar(true);
     setCompletado(false);
 
-    const timerCamion = window.setTimeout(() => {
-      setCompletado(true);
-    }, 1400);
+const timerCamion = window.setTimeout(() => {
+  setCompletado(true);
+
+  const sonido = new Audio("/sounds/ding.mp3");
+  sonido.volume = 0.35;
+  sonido.play().catch(() => {});
+}, 1400);
 
     const timerCerrar = window.setTimeout(() => {
       setMostrar(false);

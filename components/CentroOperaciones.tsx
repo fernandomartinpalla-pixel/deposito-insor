@@ -34,7 +34,7 @@ export default function CentroOperaciones({
 
   return (
     <section className="mb-8 rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 p-7 shadow-2xl">
-      <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <p className="text-sm font-bold uppercase tracking-[0.35em] text-cyan-400">
             Centro de operaciones

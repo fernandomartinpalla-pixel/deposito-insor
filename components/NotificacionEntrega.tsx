@@ -161,7 +161,7 @@ export default function NotificacionEntrega({
 
           <div className="mt-5 flex items-center gap-3">
             <div
-              className={`flex h-11 w-11 items-center justify-center rounded-full text-xl font-black transition-all duration-500 ${
+              className={`flex h-11 w-11 items-center justify-center rounded-full text-1g font-black transition-all duration-500 ${
                 completado
                   ? "scale-110 bg-emerald-400 text-emerald-950"
                   : "scale-90 bg-cyan-400/20 text-cyan-200"

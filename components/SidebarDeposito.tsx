@@ -20,7 +20,7 @@ export default function SidebarDeposito({
   onLogout,
 }: Props) {
   return (
-    <aside className="w-72 min-h-screen bg-slate-950 border-r border-slate-800 p-6 flex flex-col justify-between">
+    <aside className="w-72 min-h-screen bg-slate-950 border-r border-slate-800 p-4 flex flex-col justify-between">
       <div>
         <div className="mb-8">
           <div className="h-12 w-12 rounded-2xl bg-cyan-500 text-slate-950 flex items-center justify-center text-2xl font-black mb-4">

@@ -54,7 +54,7 @@ export default function FormularioPedido({
   onGuardar,
 }: Props) {
   return (
-    <section className="bg-slate-900 rounded-3xl border border-slate-800 p-6 mb-10">
+    <section className="bg-slate-900 rounded-3xl border border-slate-800 p-4 mb-10">
       <datalist id="clientes-list">
         {clientes.map((c) => (
           <option key={c.id} value={c.nombre} />

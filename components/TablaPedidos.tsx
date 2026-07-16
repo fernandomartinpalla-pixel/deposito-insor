@@ -52,7 +52,7 @@ export default function TablaPedidos({
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-3">
-                    <h3 className="text-xl font-bold text-white">
+                    <h3 className="text-1g font-bold text-white">
                       {e.cliente}
                     </h3>
 

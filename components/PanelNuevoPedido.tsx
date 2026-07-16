@@ -65,7 +65,7 @@ export default function PanelNuevoPedido({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60">
-      <div className="absolute right-0 top-0 h-full w-full max-w-5xl overflow-auto border-l border-slate-800 bg-slate-950 p-6 text-white shadow-2xl">
+      <div className="absolute right-0 top-0 h-full w-full max-w-5xl overflow-auto border-l border-slate-800 bg-slate-950 p-4 text-white shadow-2xl">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.35em] text-cyan-400">

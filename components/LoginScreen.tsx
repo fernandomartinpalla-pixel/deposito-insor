@@ -12,7 +12,7 @@ export default function LoginScreen({ mensaje, onLogin }: Props) {
   const [password, setPassword] = useState("");
 
   return (
-    <main className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
+    <main className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-800 rounded-3xl p-10 w-full max-w-lg text-white shadow-2xl">
         <p className="text-cyan-400 tracking-[0.4em] text-sm mb-3">
           ACCESO PRIVADO

@@ -42,7 +42,7 @@ export default function Page() {
   }, [token]);
 
   return (
-    <main className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
+    <main className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-700 rounded-3xl p-8 max-w-md w-full text-center shadow-2xl">
         <div className="text-6xl mb-6">📦</div>
 

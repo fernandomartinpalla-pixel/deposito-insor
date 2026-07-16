@@ -42,7 +42,7 @@ export default function ModalEditar({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-      <div className="w-full max-w-4xl rounded-3xl border border-slate-700 bg-slate-900 p-6 text-white shadow-2xl">
+      <div className="w-full max-w-4xl rounded-3xl border border-slate-700 bg-slate-900 p-4 text-white shadow-2xl">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold">✏️ Editar pedido</h2>

@@ -7,7 +7,7 @@ import { imprimirEtiquetasTermica as imprimirEtiquetas } from "@/lib/etiquetasTe
 import CentroOperaciones from "@/components/CentroOperaciones";
 import PanelNuevoPedido from "@/components/PanelNuevoPedido";
 import TabsDeposito, { TabDeposito } from "@/components/TabsDeposito";
-import SidebarDeposito from "@/components/SidebarDeposito";
+import LayoutOperaciones from "@/components/LayoutOperaciones";
 import LoginScreen from "@/components/LoginScreen";
 import BarraAcciones from "@/components/BarraAcciones";
 import SeccionPedidos from "@/components/SeccionPedidos";
@@ -518,26 +518,16 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <NotificacionEntrega
+    <LayoutOperaciones titulo="Entregas">
+      <main className="min-h-screen bg-slate-950 text-white">
+        <NotificacionEntrega
         visible={notificacionEntrega !== null}
         pedidoId={notificacionEntrega?.pedidoId}
         cliente={notificacionEntrega?.cliente}
         onCerrar={cerrarNotificacionEntrega}
       />
 
-      <div className="flex flex-col lg:flex-row">
-        <SidebarDeposito
-          email={user.email}
-          enReparto={enReparto.length}
-          prontosDeposito={prontosDeposito.length}
-          historial={historial.length}
-          papelera={papelera.length}
-          clientes={clientes.length}
-          onLogout={logout}
-        />
-
-        <section className="flex-1 p-4 lg:p-8">
+        <section className="p-3 sm:p-4 lg:p-8">
           <div className="flex flex-col lg:flex-row gap-5 justify-between mb-8">
             <div>
               <h2 className="text-4xl lg:text-5xl font-bold">Depósito Insor</h2>
@@ -703,9 +693,8 @@ export default function Home() {
             </section>
           )}
         </section>
-      </div>
 
-      <PanelNuevoPedido
+        <PanelNuevoPedido
         abierto={panelNuevoAbierto}
         onCerrar={() => setPanelNuevoAbierto(false)}
         clientes={clientes}
@@ -732,12 +721,13 @@ export default function Home() {
         onGuardar={guardarPedido}
       />
 
-      <ModalEditar
-        abierto={!!editando}
-        entrega={editando}
-        onCerrar={() => setEditando(null)}
-        onGuardar={actualizarPedido}
-      />
-    </main>
+        <ModalEditar
+          abierto={!!editando}
+          entrega={editando}
+          onCerrar={() => setEditando(null)}
+          onGuardar={actualizarPedido}
+        />
+      </main>
+    </LayoutOperaciones>
   );
 }

@@ -18,10 +18,15 @@ import {
   actualizarCobro,
   cambiarEstadoCobro,
   eliminarCobro,
+  subirReciboCobro,
 } from "@/lib/cobros";
 import { cargarClientes as cargarClientesDB } from "@/lib/clientes";
 
 type FiltroCobro = "pendientes" | "cobrados" | "reprogramados" | "todos";
+
+type CobroConRecibo = Cobro & {
+  recibo_url?: string | null;
+};
 
 export default function CobrosPage() {
   const [cobros, setCobros] = useState<Cobro[]>([]);
@@ -33,6 +38,9 @@ export default function CobrosPage() {
   const [cobroEditando, setCobroEditando] = useState<Cobro | null>(null);
   const [filtro, setFiltro] = useState<FiltroCobro>("pendientes");
   const [busqueda, setBusqueda] = useState("");
+  const [cobroParaConfirmar, setCobroParaConfirmar] = useState<CobroConRecibo | null>(null);
+  const [fotoRecibo, setFotoRecibo] = useState<File | null>(null);
+  const [guardandoRecibo, setGuardandoRecibo] = useState(false);
 
   const [clienteId, setClienteId] = useState<number | null>(null);
   const [cliente, setCliente] = useState("");
@@ -163,11 +171,57 @@ export default function CobrosPage() {
     }
   }
 
+  function solicitarRecibo(cobro: Cobro) {
+    setMensaje("");
+    setFotoRecibo(null);
+    setCobroParaConfirmar(cobro as CobroConRecibo);
+  }
+
+  function cerrarConfirmacionCobro() {
+    if (guardandoRecibo) return;
+    setCobroParaConfirmar(null);
+    setFotoRecibo(null);
+  }
+
+  async function confirmarCobroConRecibo() {
+    if (!cobroParaConfirmar) return;
+
+    if (!fotoRecibo) {
+      setMensaje("Tenés que sacar o seleccionar una foto del recibo.");
+      return;
+    }
+
+    try {
+      setGuardandoRecibo(true);
+      setMensaje("");
+
+      const archivoComprimido = await comprimirImagen(fotoRecibo);
+      const reciboUrl = await subirReciboCobro(
+        cobroParaConfirmar.id,
+        archivoComprimido
+      );
+
+      await cambiarEstadoCobro(
+        cobroParaConfirmar.id,
+        "cobrado",
+        "Sin especificar",
+        reciboUrl
+      );
+
+      cerrarConfirmacionCobro();
+      await cargarDatos();
+      setMensaje("Cobro registrado y recibo guardado correctamente.");
+    } catch (error: any) {
+      setMensaje(error.message || "No se pudo guardar el cobro y su recibo.");
+    } finally {
+      setGuardandoRecibo(false);
+    }
+  }
+
   async function actualizarEstado(id: number, estado: EstadoCobro) {
     try {
       setMensaje("");
-      const formaCobro = estado === "cobrado" ? "Sin especificar" : undefined;
-      await cambiarEstadoCobro(id, estado, formaCobro);
+      await cambiarEstadoCobro(id, estado);
       await cargarDatos();
 
       const mensajes: Record<EstadoCobro, string> = {
@@ -288,6 +342,7 @@ export default function CobrosPage() {
                   key={cobro.id}
                   cobro={cobro}
                   onEstado={actualizarEstado}
+                  onMarcarCobrado={solicitarRecibo}
                   onEditar={abrirEdicion}
                   onEliminar={borrarCobro}
                 />
@@ -346,6 +401,92 @@ export default function CobrosPage() {
           </div>
         )}
 
+
+        {cobroParaConfirmar && (
+          <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/80 p-4 backdrop-blur-sm">
+            <div className="mx-auto my-8 max-w-lg">
+              <Card className="border-emerald-500/40">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-400">
+                      Confirmar cobro
+                    </p>
+                    <h2 className="mt-2 text-2xl font-black">
+                      Foto del recibo
+                    </h2>
+                    <p className="mt-2 text-sm text-slate-400">
+                      {cobroParaConfirmar.cliente} · {formatearDinero(cobroParaConfirmar.monto, cobroParaConfirmar.moneda)}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={cerrarConfirmacionCobro}
+                    disabled={guardandoRecibo}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-lg hover:bg-slate-700 disabled:opacity-50"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-dashed border-slate-600 bg-slate-950 p-5">
+                  <label className="block cursor-pointer text-center">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(event) => {
+                        const archivo = event.target.files?.[0] || null;
+                        setFotoRecibo(archivo);
+                      }}
+                    />
+
+                    <div className="text-4xl">📷</div>
+                    <p className="mt-3 font-black text-white">
+                      Sacar foto o elegir imagen
+                    </p>
+                    <p className="mt-1 text-sm text-slate-400">
+                      La imagen se reducirá automáticamente antes de subirla.
+                    </p>
+                  </label>
+                </div>
+
+                {fotoRecibo && (
+                  <div className="mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                    <p className="font-bold text-emerald-200">
+                      ✓ Foto seleccionada
+                    </p>
+                    <p className="mt-1 truncate text-sm text-slate-300">
+                      {fotoRecibo.name}
+                    </p>
+                  </div>
+                )}
+
+                <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                  <Button
+                    variante="secondary"
+                    onClick={cerrarConfirmacionCobro}
+                    disabled={guardandoRecibo}
+                  >
+                    Cancelar
+                  </Button>
+
+                  <Button
+                    variante="success"
+                    onClick={confirmarCobroConRecibo}
+                    disabled={guardandoRecibo || !fotoRecibo}
+                  >
+                    {guardandoRecibo
+                      ? "Guardando recibo..."
+                      : "Confirmar cobro"}
+                  </Button>
+                </div>
+              </Card>
+            </div>
+          </div>
+        )}
+
         <style jsx global>{`
           .input-cobro {
             width: 100%;
@@ -367,11 +508,13 @@ export default function CobrosPage() {
 function TarjetaCobro({
   cobro,
   onEstado,
+  onMarcarCobrado,
   onEditar,
   onEliminar,
 }: {
-  cobro: Cobro;
+  cobro: CobroConRecibo;
   onEstado: (id: number, estado: EstadoCobro) => void;
+  onMarcarCobrado: (cobro: Cobro) => void;
   onEditar: (cobro: Cobro) => void;
   onEliminar: (id: number) => void;
 }) {
@@ -408,7 +551,9 @@ function TarjetaCobro({
 
       {cobro.estado === "pendiente" ? (
         <div className="mt-6 grid gap-2">
-          <Button variante="success" anchoCompleto onClick={() => onEstado(cobro.id, "cobrado")}>✓ Marcar cobrado</Button>
+          <Button variante="success" anchoCompleto onClick={() => onMarcarCobrado(cobro)}>
+            ✓ Marcar cobrado
+          </Button>
           <div className="grid grid-cols-2 gap-2">
             <Button variante="secondary" onClick={() => onEstado(cobro.id, "reprogramado")}>Reprogramar</Button>
             <Button variante="danger" onClick={() => onEstado(cobro.id, "no_cobrado")}>No cobrado</Button>
@@ -417,9 +562,26 @@ function TarjetaCobro({
       ) : (
         <div className="mt-6 grid gap-2">
           {cobro.estado === "cobrado" && (
-            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center font-bold text-emerald-200">
-              Cobro completado{cobro.forma_cobro ? ` · ${cobro.forma_cobro}` : ""}
-            </div>
+            <>
+              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center font-bold text-emerald-200">
+                Cobro completado{cobro.forma_cobro ? ` · ${cobro.forma_cobro}` : ""}
+              </div>
+
+              {cobro.recibo_url ? (
+                <a
+                  href={cobro.recibo_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-center font-black text-cyan-200 transition hover:bg-cyan-500/20"
+                >
+                  📄 Ver recibo
+                </a>
+              ) : (
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-center text-sm font-bold text-amber-200">
+                  Este cobro no tiene recibo adjunto.
+                </div>
+              )}
+            </>
           )}
           <Button variante="secondary" anchoCompleto onClick={() => onEstado(cobro.id, "pendiente")}>
             ↩ Volver a pendiente
@@ -486,4 +648,65 @@ function formatearDinero(valor: number, moneda: MonedaCobro) {
     currency: moneda,
     maximumFractionDigits: 2,
   }).format(Number(valor || 0));
+}
+
+
+async function comprimirImagen(archivo: File): Promise<File> {
+  if (!archivo.type.startsWith("image/")) {
+    throw new Error("El archivo seleccionado no es una imagen.");
+  }
+
+  const imagen = await cargarImagen(archivo);
+  const anchoMaximo = 1400;
+  const escala = Math.min(1, anchoMaximo / imagen.width);
+  const ancho = Math.round(imagen.width * escala);
+  const alto = Math.round(imagen.height * escala);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = ancho;
+  canvas.height = alto;
+
+  const contexto = canvas.getContext("2d");
+
+  if (!contexto) {
+    throw new Error("No se pudo procesar la imagen.");
+  }
+
+  contexto.drawImage(imagen, 0, 0, ancho, alto);
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (resultado) => {
+        if (resultado) resolve(resultado);
+        else reject(new Error("No se pudo comprimir la imagen."));
+      },
+      "image/jpeg",
+      0.78
+    );
+  });
+
+  return new File(
+    [blob],
+    `recibo-${Date.now()}.jpg`,
+    { type: "image/jpeg" }
+  );
+}
+
+function cargarImagen(archivo: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(archivo);
+    const imagen = new Image();
+
+    imagen.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(imagen);
+    };
+
+    imagen.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("No se pudo leer la imagen seleccionada."));
+    };
+
+    imagen.src = url;
+  });
 }

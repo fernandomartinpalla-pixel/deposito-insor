@@ -13,7 +13,7 @@ import BarraAcciones from "@/components/BarraAcciones";
 import SeccionPedidos from "@/components/SeccionPedidos";
 import ModalEditar from "@/components/ModalEditar";
 import NotificacionEntrega from "@/components/NotificacionEntrega";
-
+import { exportarRutaCircuit } from "@/lib/exportarCircuit";
 import type {
   Entrega,
   EstadoEntrega,
@@ -567,14 +567,33 @@ export default function Home() {
           )}
 
           <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            {!soloLectura && (
-              <button
-                onClick={() => setPanelNuevoAbierto(true)}
-                className="rounded-2xl bg-cyan-500 px-6 py-4 font-black text-slate-950 hover:bg-cyan-400"
-              >
-                ➕ Nuevo pedido
-              </button>
-            )}
+          <div className="flex flex-col gap-3 sm:flex-row">
+  {!soloLectura && (
+    <button
+      onClick={() => setPanelNuevoAbierto(true)}
+      className="rounded-2xl bg-cyan-500 px-6 py-4 font-black text-slate-950 hover:bg-cyan-400"
+    >
+      ➕ Nuevo pedido
+    </button>
+  )}
+
+<button
+  onClick={() => {
+    const seleccionadosEnReparto = enReparto.filter((pedido) =>
+      seleccionados.includes(pedido.id)
+    );
+
+    exportarRutaCircuit(seleccionadosEnReparto);
+  }}
+  disabled={
+    enReparto.filter((pedido) => seleccionados.includes(pedido.id)).length === 0
+  }
+  className="rounded-2xl bg-violet-500 px-6 py-4 font-black text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+>
+  🗺️ Exportar seleccionados a Circuit (
+  {enReparto.filter((pedido) => seleccionados.includes(pedido.id)).length})
+</button>
+</div>
 
             {pedidosSeleccionados.length > 0 && !soloLectura && (
               <BarraAcciones

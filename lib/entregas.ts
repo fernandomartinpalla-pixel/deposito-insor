@@ -1,6 +1,5 @@
 import { supabase } from "@/lib/supabase";
 import { Entrega, EstadoEntrega } from "@/types/entrega";
-
 export type FiltroHistorial = "ultimos5" | "esteMes" | "porMes" | "todas";
 
 export function normalizarEntregas(data: any[]): Entrega[] {

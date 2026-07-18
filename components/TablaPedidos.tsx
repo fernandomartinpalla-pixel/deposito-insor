@@ -97,6 +97,46 @@ export default function TablaPedidos({
                       📝 {e.observaciones}
                     </div>
                   )}
+                  {e.estado === "entregado" && (
+  <div className="mt-4 space-y-3">
+
+    {e.recibido_por && (
+      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+        <div className="text-xs uppercase text-emerald-300">
+          👤 Recibió
+        </div>
+
+        <div className="font-semibold text-white">
+          {e.recibido_por}
+        </div>
+      </div>
+    )}
+
+    {e.observacion_entrega && (
+      <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3">
+        <div className="text-xs uppercase text-cyan-300">
+          📝 Observación de entrega
+        </div>
+
+        <div className="text-white">
+          {e.observacion_entrega}
+        </div>
+      </div>
+    )}
+
+    {e.factura_firmada_url && (
+      <a
+        href={e.factura_firmada_url}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center justify-center rounded-2xl bg-emerald-600 py-3 font-bold text-white transition hover:bg-emerald-500"
+      >
+        📄 Ver factura firmada
+      </a>
+    )}
+
+  </div>
+)}
                 </div>
 
                 <div className="flex min-w-[170px] flex-col gap-2">

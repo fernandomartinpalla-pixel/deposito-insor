@@ -17,11 +17,11 @@ export interface Entrega {
   fecha_entrega_programada?: string | null;
   fecha_entregado?: string | null;
   fecha_entregado_real?: string | null;
-
+  factura_firmada_url?: string | null;
   numero_factura: string;
-
+  observacion_entrega?: string | null;
   monto: number;
-
+  recibido_por?: string | null;
   observaciones?: string | null;
 
   estado: EstadoEntrega;

@@ -40,7 +40,7 @@ import {
   guardarCliente,
 } from "@/lib/clientes";
 
-const USUARIOS_SOLO_LECTURA = ["insoroficina@gmail.com"];
+const USUARIOS_SOLO_LECTURA = [];
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -380,7 +380,23 @@ export default function Home() {
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
   }
+  function alternarSeleccionTodosReparto() {
+  const idsReparto = enReparto.map((pedido) => pedido.id);
 
+  const estanTodosSeleccionados =
+    idsReparto.length > 0 &&
+    idsReparto.every((id) => seleccionados.includes(id));
+
+  if (estanTodosSeleccionados) {
+    setSeleccionados((actuales) =>
+      actuales.filter((id) => !idsReparto.includes(id))
+    );
+  } else {
+    setSeleccionados((actuales) => [
+      ...new Set([...actuales, ...idsReparto]),
+    ]);
+  }
+}
   async function cambiarEstadoSeleccionados(estado: EstadoEntrega) {
     setMensaje("");
 
@@ -495,7 +511,12 @@ export default function Home() {
   const pedidosSeleccionados = useMemo(() => {
     return todosLosPedidos.filter((e) => seleccionados.includes(e.id));
   }, [todosLosPedidos, seleccionados]);
-
+  const todosRepartoSeleccionados = useMemo(() => {
+  return (
+    enReparto.length > 0 &&
+    enReparto.every((pedido) => seleccionados.includes(pedido.id))
+  );
+}, [enReparto, seleccionados]);
   const datosFiltrados = useMemo(() => {
     return {
       enReparto: filtrarPedidos(enReparto, busqueda),
@@ -605,17 +626,42 @@ export default function Home() {
             )}
           </div>
 
-          {tabActiva === "reparto" && (
-            <SeccionPedidos
-              titulo="🚚 Pedidos en reparto"
-              descripcion={`${datosFiltrados.enReparto.length} pedidos`}
-              entregas={datosFiltrados.enReparto}
-              seleccionados={seleccionados}
-              onSeleccionar={toggleSeleccion}
-              onEditar={setEditando}
-              onImprimirEtiqueta={(pedido) => imprimirEtiquetas([pedido])}
-            />
-          )}
+{tabActiva === "reparto" && (
+  <div>
+    <div className="mb-4 flex flex-wrap items-center gap-3">
+      <button
+        type="button"
+        onClick={alternarSeleccionTodosReparto}
+        disabled={enReparto.length === 0}
+        className={`rounded-xl px-4 py-3 text-sm font-semibold transition ${
+          todosRepartoSeleccionados
+            ? "bg-slate-700 text-white hover:bg-slate-600"
+            : "bg-cyan-500 text-slate-950 hover:bg-cyan-400"
+        } disabled:cursor-not-allowed disabled:opacity-40`}
+      >
+        {todosRepartoSeleccionados
+          ? `☐ Quitar selección (${enReparto.length})`
+          : `☑ Seleccionar todos (${enReparto.length})`}
+      </button>
+
+      {seleccionados.length > 0 && (
+        <span className="text-sm text-slate-400">
+          {seleccionados.length} seleccionados
+        </span>
+      )}
+    </div>
+
+    <SeccionPedidos
+      titulo="🚚 Pedidos en reparto"
+      descripcion={`${datosFiltrados.enReparto.length} pedidos`}
+      entregas={datosFiltrados.enReparto}
+      seleccionados={seleccionados}
+      onSeleccionar={toggleSeleccion}
+      onEditar={setEditando}
+      onImprimirEtiqueta={(pedido) => imprimirEtiquetas([pedido])}
+    />
+  </div>
+)}
 
           {tabActiva === "deposito" && (
             <SeccionPedidos

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-
+import { supabase } from "@/lib/supabase";
 import LayoutOperaciones from "@/components/LayoutOperaciones";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
@@ -54,24 +54,56 @@ export default function CobrosPage() {
   const [responsable, setResponsable] = useState("");
   const [observaciones, setObservaciones] = useState("");
 
-  useEffect(() => { cargarDatos(); }, []);
+useEffect(() => {
+  cargarDatos();
 
-  async function cargarDatos() {
-    try {
+  const canalCobros = supabase
+    .channel("cambios-cobros")
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "cobros",
+      },
+      () => {
+        cargarDatos(true);
+      }
+    )
+    .subscribe();
+
+  const respaldo = setInterval(() => {
+    cargarDatos(true);
+  }, 30000);
+
+  return () => {
+    clearInterval(respaldo);
+    supabase.removeChannel(canalCobros);
+  };
+}, []);
+
+async function cargarDatos(silencioso = false) {
+  try {
+    if (!silencioso) {
       setCargando(true);
       setMensaje("");
-      const [listaCobros, listaClientes] = await Promise.all([
-        cargarCobros(),
-        cargarClientesDB(),
-      ]);
-      setCobros(listaCobros);
-      setClientes(listaClientes);
-    } catch (error: any) {
-      setMensaje(error.message || "No se pudieron cargar los cobros.");
-    } finally {
+    }
+
+    const [listaCobros, listaClientes] = await Promise.all([
+      cargarCobros(),
+      cargarClientesDB(),
+    ]);
+
+    setCobros(listaCobros);
+    setClientes(listaClientes);
+  } catch (error: any) {
+    setMensaje(error.message || "No se pudieron cargar los cobros.");
+  } finally {
+    if (!silencioso) {
       setCargando(false);
     }
   }
+}
 
   function seleccionarCliente(nombre: string) {
     setCliente(nombre);

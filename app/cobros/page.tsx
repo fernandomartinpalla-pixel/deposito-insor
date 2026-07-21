@@ -208,9 +208,12 @@ export default function CobrosPage() {
         reciboUrl
       );
 
-      cerrarConfirmacionCobro();
-      await cargarDatos();
-      setMensaje("Cobro registrado y recibo guardado correctamente.");
+await cargarDatos();
+
+setCobroParaConfirmar(null);
+setFotoRecibo(null);
+
+setMensaje("Cobro registrado y recibo guardado correctamente.");
     } catch (error: any) {
       setMensaje(error.message || "No se pudo guardar el cobro y su recibo.");
     } finally {

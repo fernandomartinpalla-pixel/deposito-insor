@@ -40,7 +40,7 @@ import {
   guardarCliente,
 } from "@/lib/clientes";
 
-const USUARIOS_SOLO_LECTURA = [];
+const USUARIOS_SOLO_LECTURA: string[] = [];
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);

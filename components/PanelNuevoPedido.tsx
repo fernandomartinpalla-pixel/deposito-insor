@@ -2,7 +2,10 @@
 
 import FormularioPedido from "./FormularioPedido";
 import type { Cliente } from "@/types/cliente";
-import type { PrioridadEntrega } from "@/types/entrega";
+import type {
+  PrioridadEntrega,
+  TipoEntrega,
+} from "@/types/entrega";
 
 type Props = {
   abierto: boolean;
@@ -17,6 +20,7 @@ type Props = {
   monto: string;
   observaciones: string;
   prioridad: PrioridadEntrega;
+  tipoEntrega: TipoEntrega;
   telefono: string;
   direccion: string;
   departamento: string;
@@ -28,6 +32,7 @@ type Props = {
   setMonto: (valor: string) => void;
   setObservaciones: (valor: string) => void;
   setPrioridad: (valor: PrioridadEntrega) => void;
+  setTipoEntrega: (valor: TipoEntrega) => void;
   setTelefono: (valor: string) => void;
   setDireccion: (valor: string) => void;
   setDepartamento: (valor: string) => void;
@@ -46,6 +51,7 @@ export default function PanelNuevoPedido({
   monto,
   observaciones,
   prioridad,
+  tipoEntrega,
   telefono,
   direccion,
   departamento,
@@ -56,6 +62,7 @@ export default function PanelNuevoPedido({
   setMonto,
   setObservaciones,
   setPrioridad,
+  setTipoEntrega,
   setTelefono,
   setDireccion,
   setDepartamento,
@@ -82,30 +89,32 @@ export default function PanelNuevoPedido({
           </button>
         </div>
 
-        <FormularioPedido
-          clientes={clientes}
-          cliente={cliente}
-          fechaPedido={fechaPedido}
-          fechaEntrega={fechaEntrega}
-          factura={factura}
-          monto={monto}
-          observaciones={observaciones}
-          prioridad={prioridad}
-          telefono={telefono}
-          direccion={direccion}
-          departamento={departamento}
-          onClienteChange={onClienteChange}
-          setFechaPedido={setFechaPedido}
-          setFechaEntrega={setFechaEntrega}
-          setFactura={setFactura}
-          setMonto={setMonto}
-          setObservaciones={setObservaciones}
-          setPrioridad={setPrioridad}
-          setTelefono={setTelefono}
-          setDireccion={setDireccion}
-          setDepartamento={setDepartamento}
-          onGuardar={onGuardar}
-        />
+<FormularioPedido
+  clientes={clientes}
+  cliente={cliente}
+  fechaPedido={fechaPedido}
+  fechaEntrega={fechaEntrega}
+  factura={factura}
+  monto={monto}
+  observaciones={observaciones}
+  prioridad={prioridad}
+  tipoEntrega={tipoEntrega}
+  telefono={telefono}
+  direccion={direccion}
+  departamento={departamento}
+  onClienteChange={onClienteChange}
+  setFechaPedido={setFechaPedido}
+  setFechaEntrega={setFechaEntrega}
+  setFactura={setFactura}
+  setMonto={setMonto}
+  setObservaciones={setObservaciones}
+  setPrioridad={setPrioridad}
+  setTipoEntrega={setTipoEntrega}
+  setTelefono={setTelefono}
+  setDireccion={setDireccion}
+  setDepartamento={setDepartamento}
+  onGuardar={onGuardar}
+/>
       </div>
     </div>
   );

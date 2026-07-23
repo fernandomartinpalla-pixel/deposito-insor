@@ -8,11 +8,11 @@ export type PrioridadEntrega =
   | "normal"
   | "urgente"
   | "critico";
-
+export type TipoEntrega = "domicilio" | "retiro";
 export interface Entrega {
   id: number;
   cliente: string;
-
+  tipo_entrega?: TipoEntrega;
   fecha_pedido?: string | null;
   fecha_entrega_programada?: string | null;
   fecha_entregado?: string | null;
@@ -27,7 +27,7 @@ export interface Entrega {
   estado: EstadoEntrega;
 
   prioridad?: PrioridadEntrega | null;
-
+  
   telefono_cliente?: string | null;
   direccion?: string | null;
   departamento?: string | null;

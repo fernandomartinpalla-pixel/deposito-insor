@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-
 import LayoutOperaciones from "@/components/LayoutOperaciones";
 import Card from "@/components/ui/Card";
 import { cargarCobros } from "@/lib/cobros";

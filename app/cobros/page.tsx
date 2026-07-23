@@ -170,7 +170,24 @@ async function cargarDatos(silencioso = false) {
     if (!cliente.trim()) return setMensaje("Seleccioná o escribí un cliente.");
     if (!monto || Number(monto) <= 0) return setMensaje("Ingresá un monto válido.");
     if (!fechaProgramada) return setMensaje("Ingresá la fecha del cobro.");
+    const facturaNormalizada = factura.trim().toLowerCase();
 
+if (facturaNormalizada) {
+  const facturaDuplicada = cobros.some((cobro) => {
+    const mismoNumero =
+      (cobro.factura || "").trim().toLowerCase() === facturaNormalizada;
+
+    const esOtroCobro =
+      !cobroEditando || cobro.id !== cobroEditando.id;
+
+    return mismoNumero && esOtroCobro;
+  });
+
+  if (facturaDuplicada) {
+    setMensaje(`Ya existe un cobro con la factura ${factura.trim()}.`);
+    return;
+  }
+}
     try {
       setGuardando(true);
       const datos = {

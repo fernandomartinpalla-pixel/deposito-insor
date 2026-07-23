@@ -18,6 +18,7 @@ import type {
   Entrega,
   EstadoEntrega,
   PrioridadEntrega,
+  TipoEntrega,
 } from "@/types/entrega";
 
 import type { Cliente } from "@/types/cliente";
@@ -69,6 +70,8 @@ export default function Home() {
   const [monto, setMonto] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [prioridad, setPrioridad] = useState<PrioridadEntrega>("normal");
+  const [tipoEntrega, setTipoEntrega] =
+  useState<TipoEntrega>("domicilio");
   const [telefono, setTelefono] = useState("");
   const [direccion, setDireccion] = useState("");
   const [departamento, setDepartamento] = useState("");
@@ -338,18 +341,19 @@ export default function Home() {
     try {
       await guardarClienteAutomatico(cliente, telefono, direccion, departamento);
 
-      await guardarEntregaDB({
-        cliente,
-        fechaPedido,
-        fechaEntrega,
-        factura,
-        monto,
-        observaciones,
-        prioridad,
-        telefono,
-        direccion,
-        departamento,
-      });
+await guardarEntregaDB({
+  cliente,
+  fechaPedido,
+  fechaEntrega,
+  factura,
+  monto,
+  observaciones,
+  prioridad,
+  telefono,
+  direccion,
+  departamento,
+  tipoEntrega,
+});
 
       limpiarFormulario();
       await cargarPedidosActivos();
@@ -663,17 +667,18 @@ export default function Home() {
   </div>
 )}
 
-          {tabActiva === "deposito" && (
-            <SeccionPedidos
-              titulo="📦 Pedidos prontos en depósito"
-              descripcion={`${datosFiltrados.prontosDeposito.length} pedidos`}
-              entregas={datosFiltrados.prontosDeposito}
-              seleccionados={seleccionados}
-              onSeleccionar={toggleSeleccion}
-              onEditar={setEditando}
-              onImprimirEtiqueta={(pedido) => imprimirEtiquetas([pedido])}
-            />
-          )}
+{tabActiva === "deposito" && (
+  <SeccionPedidos
+    titulo="📦 Pedidos prontos en depósito"
+    descripcion={`${datosFiltrados.prontosDeposito.length} pedidos`}
+    entregas={datosFiltrados.prontosDeposito}
+    seleccionados={seleccionados}
+    mostrarFiltroTipo
+    onSeleccionar={toggleSeleccion}
+    onEditar={setEditando}
+    onImprimirEtiqueta={(pedido) => imprimirEtiquetas([pedido])}
+  />
+)}
 
           {tabActiva === "historial" && (
             <section className="bg-slate-900 border border-emerald-500 rounded-3xl p-4 mb-8">
@@ -762,6 +767,8 @@ export default function Home() {
         <PanelNuevoPedido
         abierto={panelNuevoAbierto}
         onCerrar={() => setPanelNuevoAbierto(false)}
+        prioridad={prioridad}
+        tipoEntrega={tipoEntrega}
         clientes={clientes}
         cliente={cliente}
         fechaPedido={fechaPedido}
@@ -769,17 +776,17 @@ export default function Home() {
         factura={factura}
         monto={monto}
         observaciones={observaciones}
-        prioridad={prioridad}
         telefono={telefono}
         direccion={direccion}
         departamento={departamento}
         onClienteChange={autocompletarCliente}
+        setPrioridad={setPrioridad}
+        setTipoEntrega={setTipoEntrega}
         setFechaPedido={setFechaPedido}
         setFechaEntrega={setFechaEntrega}
         setFactura={setFactura}
         setMonto={setMonto}
         setObservaciones={setObservaciones}
-        setPrioridad={setPrioridad}
         setTelefono={setTelefono}
         setDireccion={setDireccion}
         setDepartamento={setDepartamento}

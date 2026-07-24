@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import LayoutOperaciones from "@/components/LayoutOperaciones";
-import Card from "@/components/ui/Card";
 import { cargarCobros } from "@/lib/cobros";
 import {
   cargarPedidosEnReparto,
@@ -12,9 +11,12 @@ import {
 import { cargarVisitas } from "@/lib/visitas";
 
 type Registro = Record<string, any>;
+type Tono = "cyan" | "emerald" | "amber" | "rose" | "blue";
 
 export default function Home() {
   const [entregas, setEntregas] = useState<Registro[]>([]);
+  const [pedidosEnDeposito, setPedidosEnDeposito] = useState<Registro[]>([]);
+  const [pedidosEnReparto, setPedidosEnReparto] = useState<Registro[]>([]);
   const [cobros, setCobros] = useState<Registro[]>([]);
   const [visitas, setVisitas] = useState<Registro[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -35,6 +37,8 @@ export default function Home() {
           cargarVisitas(),
         ]);
 
+      setPedidosEnReparto(enReparto || []);
+      setPedidosEnDeposito(enDeposito || []);
       setEntregas([...(enReparto || []), ...(enDeposito || [])]);
       setCobros(listaCobros || []);
       setVisitas(listaVisitas || []);
@@ -57,9 +61,21 @@ export default function Home() {
       return fecha === hoy && item.estado !== "entregado";
     });
 
+    const entregasEnDeposito = pedidosEnDeposito;
+    const entregasEnReparto = pedidosEnReparto;
+
+    const entregadasHoy = entregas.filter((item) => {
+      const fecha = obtenerFecha(item, [
+        "fecha_entregado_real",
+        "fecha_entregado",
+        "updated_at",
+      ]);
+
+      return fecha === hoy && item.estado === "entregado";
+    });
+
     const cobrosHoy = cobros.filter((item) => {
       const fecha = obtenerFecha(item, ["fecha_programada"]);
-
       return fecha === hoy && item.estado === "pendiente";
     });
 
@@ -79,12 +95,16 @@ export default function Home() {
         "fecha_entrega",
       ]);
 
-      return Boolean(fecha && fecha < hoy && item.estado !== "entregado");
+      return Boolean(
+        fecha &&
+          fecha < hoy &&
+          item.estado !== "entregado" &&
+          item.tipo_entrega !== "retiro"
+      );
     });
 
     const cobrosVencidos = cobros.filter((item) => {
       const fecha = obtenerFecha(item, ["fecha_programada"]);
-
       return Boolean(fecha && fecha < hoy && item.estado === "pendiente");
     });
 
@@ -109,263 +129,321 @@ export default function Home() {
 
     return {
       entregasHoy,
+      entregasEnDeposito,
+      entregasEnReparto,
+      entregadasHoy,
       cobrosHoy,
       visitasHoy,
+      entregasVencidas,
+      cobrosVencidos,
+      visitasVencidas,
       vencidos:
         entregasVencidas.length +
         cobrosVencidos.length +
         visitasVencidas.length,
-      entregasVencidas,
-      cobrosVencidos,
-      visitasVencidas,
       totalCobrosUYU,
       totalCobrosUSD,
     };
-  }, [entregas, cobros, visitas, hoy]);
+  }, [entregas, pedidosEnDeposito, pedidosEnReparto, cobros, visitas, hoy]);
+
+  const saludo = obtenerSaludo();
+  const fechaBonita = formatearFechaLarga(new Date());
 
   return (
     <LayoutOperaciones titulo="Dashboard">
-      <main className="p-3 sm:p-4 lg:p-8">
+      <main className="min-h-screen bg-slate-950 p-3 text-white sm:p-4 lg:p-8">
         <div className="mx-auto max-w-7xl">
-          <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-sm font-bold uppercase tracking-[0.25em] text-cyan-400">
-                INSOR OPERACIONES
-              </p>
+          <div className="mb-6 flex items-center justify-end">
+  <button
+    type="button"
+    onClick={cargarResumen}
+    className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-300 hover:border-cyan-400 hover:text-white"
+  >
+    ↻ Actualizar
+  </button>
+</div>
 
-              <h1 className="mt-3 text-4xl font-black lg:text-6xl">
-                Centro de operaciones
-              </h1>
-
-              <p className="mt-3 max-w-2xl text-slate-400">
-                Resumen de lo que tenés para hoy y accesos a todos los módulos.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={cargarResumen}
-              className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 text-sm font-bold text-slate-200 transition hover:border-cyan-400 hover:text-white"
-            >
-              ↻ Actualizar
-            </button>
-          </div>
-
-          <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <section className="mb-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Indicador
               href="/entregas"
-              icono="🚚"
-              titulo="Entregas hoy"
+              icono="📦"
+              titulo="Entregas"
               valor={cargando ? "..." : String(resumen.entregasHoy.length)}
-              detalle="Pendientes para hoy"
-              color="cyan"
+              detalle="programadas para hoy"
+              tono="cyan"
             />
 
             <Indicador
               href="/cobros"
               icono="💰"
-              titulo="Cobros hoy"
+              titulo="Cobros"
               valor={cargando ? "..." : String(resumen.cobrosHoy.length)}
-              detalle="Programados para hoy"
-              color="emerald"
+              detalle="pendientes para hoy"
+              tono="emerald"
             />
 
             <Indicador
               href="/visitas"
               icono="👤"
-              titulo="Visitas hoy"
+              titulo="Visitas"
               valor={cargando ? "..." : String(resumen.visitasHoy.length)}
-              detalle="Agenda del día"
-              color="amber"
+              detalle="en la agenda de hoy"
+              tono="amber"
             />
 
             <Indicador
               href="/reportes"
               icono="⚠️"
-              titulo="Vencidos"
+              titulo="Alertas"
               valor={cargando ? "..." : String(resumen.vencidos)}
-              detalle="Tareas atrasadas"
-              color="rose"
+              detalle="tareas que requieren atención"
+              tono="rose"
             />
           </section>
 
-          {!cargando && resumen.cobrosHoy.length > 0 && (
-            <Link
-              href="/cobros"
-              className="mb-6 block rounded-3xl border border-emerald-400/40 bg-emerald-500/10 p-5 transition hover:border-emerald-300 hover:bg-emerald-500/15"
-            >
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-300">
-                    Cobros para hoy
-                  </p>
+          <section className="mb-7 grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+            <PanelOperativo resumen={resumen} cargando={cargando} />
+            <PanelAlertas resumen={resumen} cargando={cargando} />
+          </section>
 
-                  <h2 className="mt-2 text-2xl font-black">
-                    {resumen.cobrosHoy.length === 1
-                      ? "Tenés 1 cobro programado"
-                      : `Tenés ${resumen.cobrosHoy.length} cobros programados`}
-                  </h2>
-
-                  <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                    {resumen.cobrosHoy.slice(0, 6).map((cobro) => (
-                      <div
-                        key={cobro.id}
-                        className="rounded-2xl border border-emerald-400/20 bg-slate-950/60 px-4 py-3"
-                      >
-                        <p className="truncate font-bold">
-                          {cobro.cliente || "Cliente sin nombre"}
-                        </p>
-
-                        <p className="mt-1 text-sm text-emerald-200">
-                          {formatearDinero(
-                            Number(cobro.monto || 0),
-                            cobro.moneda || "UYU"
-                          )}
-                        </p>
-
-                        {cobro.factura && (
-                          <p className="mt-1 truncate text-xs text-slate-400">
-                            Factura {cobro.factura}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="min-w-56 rounded-2xl border border-emerald-400/20 bg-slate-950/60 p-4">
-                  <p className="text-xs font-black uppercase tracking-wider text-slate-400">
-                    Total para hoy
-                  </p>
-
-                  {resumen.totalCobrosUYU > 0 && (
-                    <p className="mt-2 text-xl font-black text-emerald-300">
-                      {formatearDinero(resumen.totalCobrosUYU, "UYU")}
-                    </p>
-                  )}
-
-                  {resumen.totalCobrosUSD > 0 && (
-                    <p className="mt-1 text-xl font-black text-emerald-300">
-                      {formatearDinero(resumen.totalCobrosUSD, "USD")}
-                    </p>
-                  )}
-
-                  <p className="mt-3 text-sm font-bold">
-                    Abrir cobros →
-                  </p>
-                </div>
-              </div>
-            </Link>
-          )}
-
-          {!cargando && resumen.entregasHoy.length > 0 && (
-            <Alerta
-              href="/entregas"
-              icono="🚚"
-              titulo={`${resumen.entregasHoy.length} ${
-                resumen.entregasHoy.length === 1 ? "entrega" : "entregas"
-              } para hoy`}
-              detalle={resumen.entregasHoy
-                .slice(0, 4)
-                .map((item) => item.cliente)
-                .filter(Boolean)
-                .join(" · ")}
-              color="cyan"
-            />
-          )}
-
-          {!cargando && resumen.visitasHoy.length > 0 && (
-            <Alerta
-              href="/visitas"
-              icono="👤"
-              titulo={`${resumen.visitasHoy.length} ${
-                resumen.visitasHoy.length === 1 ? "visita" : "visitas"
-              } para hoy`}
-              detalle={resumen.visitasHoy
-                .slice(0, 4)
-                .map((item) => item.cliente)
-                .filter(Boolean)
-                .join(" · ")}
-              color="amber"
-            />
-          )}
-
-          {!cargando && resumen.vencidos > 0 && (
-            <div className="mb-8 rounded-3xl border border-red-500/40 bg-red-500/10 p-5">
-              <div className="flex items-start gap-4">
-                <div className="text-3xl">⚠️</div>
-
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-red-300">
-                    Atención
-                  </p>
-
-                  <h2 className="mt-1 text-xl font-black">
-                    Tenés {resumen.vencidos} tareas vencidas
-                  </h2>
-
-                  <p className="mt-2 text-sm text-red-100/80">
-                    {resumen.entregasVencidas.length} entregas ·{" "}
-                    {resumen.cobrosVencidos.length} cobros ·{" "}
-                    {resumen.visitasVencidas.length} visitas
-                  </p>
-                </div>
+          <section className="mb-7">
+            <div className="mb-4 flex items-end justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+                  Acciones rápidas
+                </p>
+                <h2 className="mt-2 text-2xl font-black">Empezar una tarea</h2>
               </div>
             </div>
-          )}
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <Modulo
-              href="/entregas"
-              icono="🚚"
-              titulo="Entregas"
-              descripcion="Depósito, reparto, etiquetas, QR e historial."
-              color="cyan"
-            />
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <AccionRapida
+                href="/entregas"
+                icono="＋"
+                titulo="Nuevo pedido"
+                detalle="Registrar una entrega o un retiro"
+                tono="cyan"
+              />
 
-            <Modulo
-              href="/cobros"
-              icono="💰"
-              titulo="Cobros"
-              descripcion="Cobros pendientes, completados y reprogramados."
-              color="emerald"
-            />
+              <AccionRapida
+                href="/visitas"
+                icono="👤"
+                titulo="Nueva visita"
+                detalle="Agendar o registrar una visita"
+                tono="amber"
+              />
 
-            <Modulo
-              href="/visitas"
-              icono="👤"
-              titulo="Visitas"
-              descripcion="Agenda comercial, clientes y seguimientos."
-              color="amber"
-            />
+              <AccionRapida
+                href="/cobros"
+                icono="💰"
+                titulo="Nuevo cobro"
+                detalle="Programar un cobro a cliente"
+                tono="emerald"
+              />
 
-            <Modulo
-              href="/rutas"
-              icono="🗺️"
-              titulo="Ruta del día"
-              descripcion="Organizar tareas y abrir el recorrido en Google Maps."
-              color="violet"
-            />
+              <AccionRapida
+                href="/clientes"
+                icono="🔎"
+                titulo="Buscar cliente"
+                detalle="Abrir su información e historial"
+                tono="blue"
+              />
+            </div>
+          </section>
 
-            <Modulo
-              href="/clientes"
-              icono="👥"
-              titulo="Clientes"
-              descripcion="Base compartida de clientes, teléfonos y direcciones."
-              color="blue"
-            />
+          <section>
+            <div className="mb-4">
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+                Módulos
+              </p>
+              <h2 className="mt-2 text-2xl font-black">Todo Insor en un lugar</h2>
+            </div>
 
-            <Modulo
-              href="/reportes"
-              icono="📊"
-              titulo="Reportes"
-              descripcion="Resultados de entregas, cobros y visitas."
-              color="rose"
-            />
-          </div>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+              <Modulo
+                href="/entregas"
+                icono="📦"
+                titulo="Entregas"
+                descripcion="Depósito, reparto, retiros, etiquetas y QR."
+                tono="cyan"
+              />
+
+              <Modulo
+                href="/cobros"
+                icono="💰"
+                titulo="Cobros"
+                descripcion="Pendientes, vencidos, realizados y reprogramados."
+                tono="emerald"
+              />
+
+              <Modulo
+                href="/visitas"
+                icono="👤"
+                titulo="Visitas"
+                descripcion="Agenda comercial, resultados y seguimientos."
+                tono="amber"
+              />
+
+              <Modulo
+                href="/clientes"
+                icono="👥"
+                titulo="Clientes"
+                descripcion="Datos, contactos y futuro historial 360°."
+                tono="blue"
+              />
+
+              <Modulo
+                href="/reportes"
+                icono="📊"
+                titulo="Reportes"
+                descripcion="Resultados de entregas, cobros y visitas."
+                tono="rose"
+              />
+            </div>
+          </section>
         </div>
       </main>
     </LayoutOperaciones>
+  );
+}
+
+function PanelOperativo({
+  resumen,
+  cargando,
+}: {
+  resumen: Record<string, any>;
+  cargando: boolean;
+}) {
+  return (
+    <div className="rounded-[2rem] border border-slate-800 bg-slate-900 p-5 shadow-xl sm:p-6">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">
+            Operación del día
+          </p>
+          <h2 className="mt-2 text-2xl font-black">Estado general</h2>
+        </div>
+
+        <Link
+          href="/entregas"
+          className="text-sm font-bold text-cyan-300 hover:text-cyan-200"
+        >
+          Abrir entregas →
+        </Link>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <DatoOperacion
+          etiqueta="En depósito"
+          valor={cargando ? "..." : resumen.entregasEnDeposito.length}
+        />
+        <DatoOperacion
+          etiqueta="En reparto"
+          valor={cargando ? "..." : resumen.entregasEnReparto.length}
+        />
+        <DatoOperacion
+          etiqueta="Entregas para hoy"
+          valor={cargando ? "..." : resumen.entregasHoy.length}
+        />
+        <DatoOperacion
+          etiqueta="Entregadas hoy"
+          valor={cargando ? "..." : resumen.entregadasHoy.length}
+        />
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">
+              Cobros programados
+            </p>
+            <p className="mt-1 text-lg font-black">
+              {cargando
+                ? "Cargando..."
+                : `${resumen.cobrosHoy.length} para hoy`}
+            </p>
+          </div>
+
+          <div className="text-left sm:text-right">
+            {resumen.totalCobrosUYU > 0 && (
+              <p className="font-black text-emerald-200">
+                {formatearDinero(resumen.totalCobrosUYU, "UYU")}
+              </p>
+            )}
+            {resumen.totalCobrosUSD > 0 && (
+              <p className="font-black text-emerald-200">
+                {formatearDinero(resumen.totalCobrosUSD, "USD")}
+              </p>
+            )}
+            {!cargando &&
+              resumen.totalCobrosUYU === 0 &&
+              resumen.totalCobrosUSD === 0 && (
+                <p className="text-sm text-emerald-100/70">Sin importes para hoy</p>
+              )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PanelAlertas({
+  resumen,
+  cargando,
+}: {
+  resumen: Record<string, any>;
+  cargando: boolean;
+}) {
+  const sinAlertas = !cargando && resumen.vencidos === 0;
+
+  return (
+    <div className="rounded-[2rem] border border-slate-800 bg-slate-900 p-5 shadow-xl sm:p-6">
+      <p className="text-xs font-bold uppercase tracking-[0.2em] text-rose-400">
+        Atención
+      </p>
+      <h2 className="mt-2 text-2xl font-black">Alertas importantes</h2>
+
+      <div className="mt-5 space-y-3">
+        {cargando && (
+          <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-slate-400">
+            Revisando pendientes...
+          </div>
+        )}
+
+        {!cargando && resumen.entregasVencidas.length > 0 && (
+          <AlertaLinea
+            href="/entregas"
+            icono="📦"
+            texto={`${resumen.entregasVencidas.length} entregas atrasadas`}
+          />
+        )}
+
+        {!cargando && resumen.cobrosVencidos.length > 0 && (
+          <AlertaLinea
+            href="/cobros"
+            icono="💰"
+            texto={`${resumen.cobrosVencidos.length} cobros vencidos`}
+          />
+        )}
+
+        {!cargando && resumen.visitasVencidas.length > 0 && (
+          <AlertaLinea
+            href="/visitas"
+            icono="👤"
+            texto={`${resumen.visitasVencidas.length} visitas atrasadas`}
+          />
+        )}
+
+        {sinAlertas && (
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+            <p className="font-black text-emerald-200">✓ Todo al día</p>
+            <p className="mt-1 text-sm text-emerald-100/70">
+              No hay tareas vencidas en este momento.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -375,81 +453,64 @@ function Indicador({
   titulo,
   valor,
   detalle,
-  color,
+  tono,
 }: {
   href: string;
   icono: string;
   titulo: string;
   valor: string;
   detalle: string;
-  color: "cyan" | "emerald" | "amber" | "rose";
+  tono: Tono;
 }) {
-  const estilos = {
-    cyan: "border-cyan-500/30 hover:border-cyan-400",
-    emerald: "border-emerald-500/30 hover:border-emerald-400",
-    amber: "border-amber-500/30 hover:border-amber-400",
-    rose: "border-rose-500/30 hover:border-rose-400",
-  };
-
   return (
-    <Link href={href}>
-      <Card
-        className={`h-full border transition hover:-translate-y-1 ${estilos[color]}`}
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-              {titulo}
-            </p>
-
-            <div className="mt-3 text-4xl font-black">{valor}</div>
-
-            <p className="mt-2 text-sm text-slate-400">{detalle}</p>
-          </div>
-
-          <div className="text-3xl">{icono}</div>
+    <Link
+      href={href}
+      className={`group rounded-[1.75rem] border bg-slate-900 p-5 shadow-xl transition duration-200 hover:-translate-y-1 ${estiloBorde(
+        tono
+      )}`}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+            {titulo}
+          </p>
+          <p className="mt-3 text-4xl font-black tracking-tight">{valor}</p>
+          <p className="mt-2 text-sm text-slate-400">{detalle}</p>
         </div>
-      </Card>
+
+        <div className={`rounded-2xl p-3 text-2xl ${estiloFondo(tono)}`}>
+          {icono}
+        </div>
+      </div>
     </Link>
   );
 }
 
-function Alerta({
+function AccionRapida({
   href,
   icono,
   titulo,
   detalle,
-  color,
+  tono,
 }: {
   href: string;
   icono: string;
   titulo: string;
   detalle: string;
-  color: "cyan" | "amber";
+  tono: Tono;
 }) {
-  const estilos = {
-    cyan: "border-cyan-500/40 bg-cyan-500/10 hover:border-cyan-300",
-    amber: "border-amber-500/40 bg-amber-500/10 hover:border-amber-300",
-  };
-
   return (
     <Link
       href={href}
-      className={`mb-4 block rounded-3xl border p-5 transition ${estilos[color]}`}
+      className={`group rounded-[1.75rem] border bg-slate-900 p-5 shadow-xl transition hover:-translate-y-1 ${estiloBorde(
+        tono
+      )}`}
     >
-      <div className="flex items-start gap-4">
-        <div className="text-3xl">{icono}</div>
-
-        <div>
-          <h2 className="text-xl font-black">{titulo}</h2>
-
-          {detalle && (
-            <p className="mt-2 text-sm text-slate-300">{detalle}</p>
-          )}
-
-          <p className="mt-3 text-sm font-bold">Abrir módulo →</p>
-        </div>
+      <div className={`inline-flex rounded-2xl p-3 text-2xl ${estiloFondo(tono)}`}>
+        {icono}
       </div>
+      <h3 className="mt-4 text-lg font-black">{titulo}</h3>
+      <p className="mt-2 text-sm leading-6 text-slate-400">{detalle}</p>
     </Link>
   );
 }
@@ -459,47 +520,92 @@ function Modulo({
   icono,
   titulo,
   descripcion,
-  color,
+  tono,
 }: {
   href: string;
   icono: string;
   titulo: string;
   descripcion: string;
-  color: "cyan" | "emerald" | "amber" | "violet" | "blue" | "rose";
+  tono: Tono;
 }) {
-  const estilos = {
-    cyan: "border-cyan-500/30 hover:border-cyan-400",
-    emerald: "border-emerald-500/30 hover:border-emerald-400",
-    amber: "border-amber-500/30 hover:border-amber-400",
-    violet: "border-violet-500/30 hover:border-violet-400",
-    blue: "border-blue-500/30 hover:border-blue-400",
-    rose: "border-rose-500/30 hover:border-rose-400",
-  };
-
   return (
     <Link
       href={href}
-      className={`group rounded-3xl border bg-slate-900 p-4 shadow-xl transition duration-200 hover:-translate-y-1 hover:bg-slate-800 ${estilos[color]}`}
+      className={`group rounded-[1.75rem] border bg-slate-900 p-5 shadow-xl transition hover:-translate-y-1 ${estiloBorde(
+        tono
+      )}`}
     >
-      <div className="text-4xl">{icono}</div>
-
-      <h2 className="mt-5 text-2xl font-black">{titulo}</h2>
-
-      <p className="mt-2 min-h-10 text-sm leading-6 text-slate-400">
-        {descripcion}
-      </p>
-
-      <div className="mt-6 text-sm font-bold text-white">
-        Abrir módulo →
-      </div>
+      <div className="text-3xl">{icono}</div>
+      <h3 className="mt-4 text-xl font-black">{titulo}</h3>
+      <p className="mt-2 text-sm leading-6 text-slate-400">{descripcion}</p>
+      <p className="mt-5 text-sm font-bold text-white">Abrir →</p>
     </Link>
   );
 }
 
-function obtenerFecha(
-  item: Registro,
-  campos: string[]
-): string {
+function DatoOperacion({
+  etiqueta,
+  valor,
+}: {
+  etiqueta: string;
+  valor: string | number;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+      <p className="text-sm text-slate-400">{etiqueta}</p>
+      <p className="mt-2 text-2xl font-black">{valor}</p>
+    </div>
+  );
+}
+
+function AlertaLinea({
+  href,
+  icono,
+  texto,
+}: {
+  href: string;
+  icono: string;
+  texto: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center justify-between gap-3 rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 transition hover:border-rose-400/50"
+    >
+      <div className="flex items-center gap-3">
+        <span className="text-xl">{icono}</span>
+        <span className="font-bold text-rose-100">{texto}</span>
+      </div>
+      <span className="text-rose-200">→</span>
+    </Link>
+  );
+}
+
+function estiloBorde(tono: Tono) {
+  const estilos: Record<Tono, string> = {
+    cyan: "border-cyan-500/25 hover:border-cyan-400",
+    emerald: "border-emerald-500/25 hover:border-emerald-400",
+    amber: "border-amber-500/25 hover:border-amber-400",
+    rose: "border-rose-500/25 hover:border-rose-400",
+    blue: "border-blue-500/25 hover:border-blue-400",
+  };
+
+  return estilos[tono];
+}
+
+function estiloFondo(tono: Tono) {
+  const estilos: Record<Tono, string> = {
+    cyan: "bg-cyan-500/10 text-cyan-300",
+    emerald: "bg-emerald-500/10 text-emerald-300",
+    amber: "bg-amber-500/10 text-amber-300",
+    rose: "bg-rose-500/10 text-rose-300",
+    blue: "bg-blue-500/10 text-blue-300",
+  };
+
+  return estilos[tono];
+}
+
+function obtenerFecha(item: Registro, campos: string[]): string {
   for (const campo of campos) {
     const valor = item[campo];
 
@@ -520,10 +626,24 @@ function fechaLocalISO() {
   return `${anio}-${mes}-${dia}`;
 }
 
-function formatearDinero(
-  valor: number,
-  moneda: "UYU" | "USD"
-) {
+function obtenerSaludo() {
+  const hora = new Date().getHours();
+
+  if (hora < 12) return "Buenos días";
+  if (hora < 19) return "Buenas tardes";
+  return "Buenas noches";
+}
+
+function formatearFechaLarga(fecha: Date) {
+  return new Intl.DateTimeFormat("es-UY", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(fecha);
+}
+
+function formatearDinero(valor: number, moneda: "UYU" | "USD") {
   return new Intl.NumberFormat("es-UY", {
     style: "currency",
     currency: moneda,

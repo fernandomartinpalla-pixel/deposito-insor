@@ -7,6 +7,10 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import PageHeader from "@/components/ui/PageHeader";
+<<<<<<< HEAD
+import BotonHistorialCliente from "@/components/BotonHistorialCliente";
+=======
+>>>>>>> 47ce635f1c724dd0eb05c1afc104566695ef585a
 
 import type { Cliente } from "@/types/cliente";
 import type {
@@ -811,6 +815,13 @@ function TarjetaVisita({
       )}
 
       <div className="mt-6 grid gap-2">
+<<<<<<< HEAD
+        <BotonHistorialCliente
+          clienteId={visita.cliente_id}
+          texto="✨ Abrir ficha CRM"
+          className="w-full border-cyan-500/40 bg-cyan-500/10 py-3 font-black text-cyan-100 hover:bg-cyan-500/20 disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500"
+        />
+=======
         <Button
           variante="secondary"
           anchoCompleto
@@ -819,6 +830,7 @@ function TarjetaVisita({
         >
           📜 Historial de Visitas
         </Button>
+>>>>>>> 47ce635f1c724dd0eb05c1afc104566695ef585a
 
         <Button
           variante="secondary"

@@ -200,6 +200,16 @@ function TarjetaCliente({
       </div>
 
       <div className="mt-6 grid gap-2">
+<<<<<<< HEAD
+        <Link
+          href={`/clientes/${cliente.id}/historial`}
+          className="rounded-2xl border border-cyan-400/40 bg-cyan-500 px-4 py-3 text-center font-black text-slate-950 transition hover:bg-cyan-400"
+        >
+          ✨ Abrir ficha CRM
+        </Link>
+
+=======
+>>>>>>> 47ce635f1c724dd0eb05c1afc104566695ef585a
         <button
           type="button"
           onClick={() => onMaps(cliente)}

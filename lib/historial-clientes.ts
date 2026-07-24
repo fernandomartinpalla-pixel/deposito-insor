@@ -145,23 +145,29 @@ export async function obtenerHistorialCliente(
     );
   }
 
-  const visitas = unirPorId(
-    (visitasIdResultado.data ?? []) as VisitaDB[],
-    (visitasNombreResultado.data ?? []).filter((item: Registro) =>
+const visitas = unirPorId<VisitaDB>(
+  (visitasIdResultado.data ?? []) as VisitaDB[],
+  (visitasNombreResultado.data ?? []).filter(
+    (item: Registro) =>
+      typeof item.cliente === "string" &&
       mismoNombre(item.cliente, cliente.nombre),
-    ) as VisitaDB[],
-  );
+  ) as VisitaDB[],
+);
 
-  const cobros = unirPorId(
-    (cobrosIdResultado.data ?? []) as CobroDB[],
-    (cobrosNombreResultado.data ?? []).filter((item: Registro) =>
+const cobros = unirPorId(
+  (cobrosIdResultado.data ?? []) as CobroDB[],
+  (cobrosNombreResultado.data ?? []).filter(
+    (item: Registro) =>
+      typeof item.cliente === "string" &&
       mismoNombre(item.cliente, cliente.nombre),
-    ) as CobroDB[],
-  );
+  ) as CobroDB[],
+);
 
-  const entregas = (entregasResultado.data ?? []).filter((item: Registro) =>
+const entregas = (entregasResultado.data ?? []).filter(
+  (item: Registro) =>
+    typeof item.cliente === "string" &&
     mismoNombre(item.cliente, cliente.nombre),
-  ) as EntregaDB[];
+) as EntregaDB[];
 
   const movimientos: MovimientoHistorial[] = [];
 

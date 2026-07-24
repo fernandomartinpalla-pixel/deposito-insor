@@ -41,6 +41,7 @@ export default function VisitasPage() {
   const [panelAbierto, setPanelAbierto] = useState(false);
   const [filtro, setFiltro] = useState<FiltroVisita>("pendientes");
   const [busqueda, setBusqueda] = useState("");
+  const [clienteHistorial, setClienteHistorial] = useState<Visita | null>(null);
 
   const [clienteId, setClienteId] = useState<number | null>(null);
   const [cliente, setCliente] = useState("");
@@ -429,11 +430,20 @@ const [proximaVisitaAccion, setProximaVisitaAccion] = useState("");
                   onEstado={actualizarEstado}
                   onEliminar={borrarVisita}
                   onMaps={abrirGoogleMaps}
+                  onHistorial={setClienteHistorial}
                 />
               ))}
             </section>
           )}
         </div>
+
+        {clienteHistorial && (
+          <HistorialCliente
+            visitaBase={clienteHistorial}
+            visitas={visitas}
+            onCerrar={() => setClienteHistorial(null)}
+          />
+        )}
 
         {panelAbierto && (
           <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 p-4 backdrop-blur-sm">
@@ -727,11 +737,13 @@ function TarjetaVisita({
   onEstado,
   onEliminar,
   onMaps,
+  onHistorial,
 }: {
   visita: Visita;
   onEstado: (visita: Visita, estado: EstadoVisita) => void;
   onEliminar: (id: number) => void;
   onMaps: (visita: Visita) => void;
+  onHistorial: (visita: Visita) => void;
 }) {
   return (
     <Card className="transition hover:-translate-y-1 hover:border-amber-500/40">
@@ -802,6 +814,15 @@ function TarjetaVisita({
         <Button
           variante="secondary"
           anchoCompleto
+          onClick={() => onHistorial(visita)}
+          className="border-cyan-500/40 bg-cyan-500/10 text-cyan-100 hover:bg-cyan-500/20"
+        >
+          📜 Historial de Visitas
+        </Button>
+
+        <Button
+          variante="secondary"
+          anchoCompleto
           onClick={() => onMaps(visita)}
         >
           🗺️ Abrir en Google Maps
@@ -843,6 +864,219 @@ function TarjetaVisita({
       </div>
     </Card>
   );
+}
+
+function HistorialCliente({
+  visitaBase,
+  visitas,
+  onCerrar,
+}: {
+  visitaBase: Visita;
+  visitas: Visita[];
+  onCerrar: () => void;
+}) {
+  const nombreNormalizado = visitaBase.cliente.trim().toLowerCase();
+
+  const historial = visitas
+    .filter((visita) => {
+      if (visitaBase.cliente_id && visita.cliente_id) {
+        return visita.cliente_id === visitaBase.cliente_id;
+      }
+
+      return visita.cliente.trim().toLowerCase() === nombreNormalizado;
+    })
+    .sort((a, b) => fechaOrdenVisita(b) - fechaOrdenVisita(a));
+
+  const realizadas = historial.filter((v) => v.estado === "realizada").length;
+  const pendientes = historial.filter((v) => v.estado === "pendiente").length;
+  const reprogramadas = historial.filter(
+    (v) => v.estado === "reprogramada"
+  ).length;
+
+  const ultimaRealizada = historial.find((v) => v.estado === "realizada");
+  const proxima = historial
+    .filter(
+      (v) =>
+        v.estado !== "realizada" &&
+        v.estado !== "cancelada" &&
+        v.fecha_programada
+    )
+    .sort((a, b) => fechaOrdenVisita(a) - fechaOrdenVisita(b))[0];
+
+  return (
+    <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/80 p-3 backdrop-blur-sm sm:p-5">
+      <div className="mx-auto my-4 max-w-5xl">
+        <Card className="border-cyan-500/30 p-0 overflow-hidden">
+          <div className="border-b border-slate-800 bg-slate-950/80 p-5 sm:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-400">
+                  Estado de cuenta comercial
+                </p>
+                <h2 className="mt-2 text-2xl font-black sm:text-3xl">
+                  {visitaBase.cliente}
+                </h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  Historial cronológico de contactos y visitas del cliente.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={onCerrar}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-800 text-xl text-white hover:bg-slate-700"
+                aria-label="Cerrar historial"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
+              <ResumenHistorial titulo="Total" valor={historial.length} />
+              <ResumenHistorial titulo="Realizadas" valor={realizadas} />
+              <ResumenHistorial titulo="Pendientes" valor={pendientes} />
+              <ResumenHistorial titulo="Reprogramadas" valor={reprogramadas} />
+              <ResumenHistorial
+                titulo="Próxima"
+                valor={proxima ? fechaUY(proxima.fecha_programada) : "-"}
+              />
+            </div>
+          </div>
+
+          <div className="p-5 sm:p-7">
+            <div className="mb-6 grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <p className="text-xs font-black uppercase tracking-wider text-slate-500">
+                  Última visita realizada
+                </p>
+                <p className="mt-2 font-bold text-white">
+                  {ultimaRealizada
+                    ? fechaUY(
+                        ultimaRealizada.fecha_realizada ||
+                          ultimaRealizada.fecha_programada
+                      )
+                    : "Sin visitas realizadas"}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <p className="text-xs font-black uppercase tracking-wider text-slate-500">
+                  Responsable más reciente
+                </p>
+                <p className="mt-2 font-bold text-white">
+                  {historial[0]?.responsable || "Sin responsable"}
+                </p>
+              </div>
+            </div>
+
+            {historial.length === 0 ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-8 text-center text-slate-400">
+                No hay actividad registrada para este cliente.
+              </div>
+            ) : (
+              <div className="relative space-y-4 before:absolute before:bottom-4 before:left-[18px] before:top-4 before:w-px before:bg-slate-700">
+                {historial.map((visita) => (
+                  <div key={visita.id} className="relative pl-12">
+                    <div className="absolute left-0 top-5 flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-sm">
+                      {iconoEstadoVisita(visita.estado)}
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 sm:p-5">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="flex flex-wrap gap-2">
+                            <EstadoVisitaBadge estado={visita.estado} />
+                            <PrioridadBadge prioridad={visita.prioridad} />
+                          </div>
+                          <h3 className="mt-3 text-lg font-black">
+                            {visita.motivo || "Contacto comercial"}
+                          </h3>
+                        </div>
+
+                        <div className="text-sm font-bold text-slate-300">
+                          {fechaUY(
+                            visita.fecha_realizada || visita.fecha_programada
+                          )}
+                          {visita.hora_programada
+                            ? ` · ${visita.hora_programada.slice(0, 5)}`
+                            : ""}
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+                        <Dato
+                          titulo="Responsable"
+                          valor={visita.responsable || "-"}
+                        />
+                        <Dato
+                          titulo="Próxima visita"
+                          valor={fechaUY(visita.proxima_visita)}
+                        />
+                      </div>
+
+                      {visita.observaciones && (
+                        <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900 p-3 text-sm text-slate-300">
+                          <p className="mb-1 text-xs font-black uppercase tracking-wider text-slate-500">
+                            Observaciones
+                          </p>
+                          {visita.observaciones}
+                        </div>
+                      )}
+
+                      {visita.resultado && (
+                        <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-100">
+                          <p className="mb-1 text-xs font-black uppercase tracking-wider text-amber-300">
+                            Resultado
+                          </p>
+                          {visita.resultado}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function ResumenHistorial({
+  titulo,
+  valor,
+}: {
+  titulo: string;
+  valor: string | number;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-3">
+      <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">
+        {titulo}
+      </p>
+      <p className="mt-2 text-xl font-black text-white">{valor}</p>
+    </div>
+  );
+}
+
+function fechaOrdenVisita(visita: Visita) {
+  const fecha =
+    visita.fecha_realizada ||
+    visita.fecha_programada ||
+    visita.created_at ||
+    "1970-01-01";
+
+  const valor = new Date(fecha).getTime();
+  return Number.isNaN(valor) ? 0 : valor;
+}
+
+function iconoEstadoVisita(estado: EstadoVisita) {
+  if (estado === "realizada") return "✓";
+  if (estado === "reprogramada") return "↻";
+  if (estado === "no_encontrado") return "?";
+  if (estado === "cancelada") return "×";
+  return "●";
 }
 
 function EstadoVisitaBadge({
